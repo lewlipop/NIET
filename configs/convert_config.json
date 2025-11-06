@@ -26,7 +26,7 @@
       "status_map": {
         "-": "ffffff",
         "Open": "FFC7CE",
-        "On-going": "FFEB9C",
+        "Follow up": "FFEB9C",
         "Closed": "FFFFFF",
         "Declared": "82F073"
       },
@@ -51,7 +51,7 @@
         "IP": "=IF(ISBLANK({IP_original_cell}), IF(ISBLANK(INDEX({hosts_table_name}!$B$2:$B${host_rows}, MATCH({Hostname_original_cell}, {hosts_table_name}!$A$2:$A${host_rows}, 0))), \"\", INDEX({hosts_table_name}!$B$2:$B${host_rows}, MATCH({Hostname_original_cell}, {hosts_table_name}!$A$2:$A${host_rows}, 0))), {IP_original_cell})",
         "OS": "=IF(ISBLANK({OS_original_cell}), IF(ISBLANK(INDEX({hosts_table_name}!$C$2:$C${host_rows}, MATCH({ip_cell}, {hosts_table_name}!$B$2:$B${host_rows}, 0))), \"\", INDEX({hosts_table_name}!$C$2:$C${host_rows}, MATCH({ip_cell}, {hosts_table_name}!$B$2:$B${host_rows}, 0))), {OS_original_cell})"
       },
-      "additional_columns": {"Status": "Open", "Remarks": ""},
+      "additional_columns": {"Category": "", "Status": "Open", "Remarks": "", "Remediation Plan": "", "Estimated date of completion": ""},
       "headers_to_remove": ["Host"]
     },
     "sheets": {
@@ -61,7 +61,7 @@
         "filter": ["^None$", "^Low$", "^Medium$", "^High$", "^Critical$"],
         "column_filter_lookup": ["^Risk$"],
         "filter_exclude": [],
-        "visible_columns": ["Risk", "Hostname", "IP", "OS", "Name", "Synopsis", "Description", "Solution", "See Also", "Plugin Output", "Status", "Remarks"],
+        "visible_columns": ["Risk", "Hostname", "IP", "OS", "Name", "Synopsis", "Description", "Solution", "See Also", "Plugin Output", "Category", "Status", "Remarks", "Remediation Plan", "Estimated date of completion"],
         "auto_width_columns": [],
         "text_format_column": "Risk",
         "text_format": {
@@ -77,7 +77,7 @@
         "filter": ["^WARNING$", "^FAILED$"],
         "column_filter_lookup": ["^Risk$"],
         "filter_exclude": [],
-        "visible_columns": ["Risk", "Hostname", "IP", "OS", "Name", "Synopsis", "Description", "Solution", "See Also", "Plugin Output", "Status", "Remarks"],
+        "visible_columns": ["Risk", "Hostname", "IP", "OS", "Name", "Synopsis", "Description", "Solution", "See Also", "Plugin Output", "Category", "Status", "Remarks", "Remediation Plan", "Estimated date of completion"],
         "auto_width_columns": [],
         "text_format_column": "Risk",
         "text_format": {

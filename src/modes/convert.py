@@ -181,11 +181,37 @@ def add_lookup_formulas(sheet, hosts_sheet, sheet_options):
             # Assign the computed formula to the appropriate cell in the target column
             sheet.cell(row=i, column=col_indices[target_col]).value = formula
 
+def add_validation(sheet, values, header:str, default_value:str=None):
+    """
+    Add data validation for the given column on the given sheet.
+    """
+    headers = [cell.value for cell in sheet[1]]
+    try:
+        category_idx = headers.index(header) + 1
+    except ValueError:
+        return
+    max_row = sheet.max_row
+    if max_row < 2:
+        return
+    # Excel requires the list to be under 255 chars, so join with comma
+    dv = DataValidation(type="list", formula1=f'"{",".join(values)}"', allow_blank=False)
+    dv.error = 'Select a value from the list'
+    dv.errorTitle = 'Invalid Entry'
+    dv_range = f"{get_column_letter(category_idx)}2:{get_column_letter(category_idx)}{max_row}"
+    sheet.add_data_validation(dv)
+    dv.add(dv_range)
+
+    # Set default value if provided
+    if default_value is not None and default_value in values:
+        for row in range(2, max_row + 1):
+            cell = sheet.cell(row=row, column=category_idx)
+            if not cell.value:  # Only set if cell is empty
+                cell.value = default_value# Set default value if provided
 
 def add_status_validation(sheet, config=None):
     """
     Add data validation for the "Status" column on the given sheet.
-    Acceptable values: "-", "Open", "On-going", "Closed".
+    Acceptable values: "-", "Open", "Follow up", "Closed".
     """
     if config is None:
         config = {}
@@ -193,7 +219,7 @@ def add_status_validation(sheet, config=None):
     DEFAULT_STATUS_MAP = {
         "-": "ffffff",
         "Open": "FF0000",
-        "On-going": "FFC7CE",
+        "Follow up": "FFC7CE",
         "Closed": "FFEB9C",
         "Declared": "24FC03"
     }
@@ -220,17 +246,17 @@ def add_status_validation(sheet, config=None):
 def add_conditional_formatting(sheet, config=None):
     """
     Add conditional formatting to the "Status" column.
-    Applies a red fill for "Open" and an orange fill for "On-going".
+    Applies a red fill for "Open" and an orange fill for "Follow up".
     """
     if config is None:
         config = {}
         
     DEFAULT_STATUS_MAP = {
         "-": "ffffff",
-        "Open": "FF0000",
-        "On-going": "FFC7CE",
-        "Closed": "FFEB9C",
-        "Declared": "24FC03"
+        "Open": "FFC7CE",
+        "Follow up": "FFEB9C",
+        "Closed": "82F073",
+        "Declared": "8DB5F0"
     }
         
     status_map = config.get("status_map", DEFAULT_STATUS_MAP)
@@ -331,6 +357,130 @@ def hide_and_autowidth_columns(sheet, allowed_columns, auto_columns):
                     max_length = max(max_length, len(str(cell.value)))
             sheet.column_dimensions[col_letter].width = max_length + 2
 
+def create_summary_sheet(wb):
+    """
+    Create a 'Summary' sheet with "Non-Compliance" and "Vulnerability" sections.
+    Categories are fixed in column A, other columns are left empty.
+    The header row and the 'Vulnerability' section row are styled like other sheet headers.
+    The 'Number of findings' column is filled with formulas.
+    """
+    non_compliance = [
+        "Missing OS or Software Patch",
+        "Inadequate Hardening",
+        "Unauthorised Open Port or Service or Devices",
+        "Unauthorised Software or File",
+        "Unauthorised Network Shared Drive or Folder",
+        "Excessive Privileged Account",
+        "Approved ACMs not Implemented"
+    ]
+    vulnerability = [
+        "End-of-Life OS or software",
+        "Software or Firmware Vulnerabilities",
+        "Web-Based Vulnerabilities"
+    ]
+    headers = [
+        "Non-Compliance",
+        "Highest Cyber Severity",
+        "Number of audited servers/devices affected",
+        "Status",
+        "Number of findings"
+    ]
+    sheet = wb.create_sheet("Summary")
+    sheet.append(headers)
+
+    # --- Add Non-Compliance categories (rows 2-8) ---
+    for cat in non_compliance:
+        sheet.append([cat] + [""] * (len(headers) - 1))
+
+    # --- Vulnerability section header (row 9) ---
+    sheet.append(["Vulnerability"] + [""] * (len(headers) - 1))
+
+    # --- Add Vulnerability categories (rows 10-12) ---
+    for cat in vulnerability:
+        sheet.append([cat] + [""] * (len(headers) - 1))
+
+    # --- Style header and Vulnerability row like other sheet headers ---
+    header_fill = PatternFill(start_color="A5A5A5", end_color="A5A5A5", fill_type="solid")
+    header_font_color = "000000"
+    thin_border = Border(
+        left=Side(style="thin"),
+        right=Side(style="thin"),
+        top=Side(style="thin"),
+        bottom=Side(style="thin")
+    )
+
+    # Style the header row (row 1)
+    for cell in sheet[1]:
+        cell.border = thin_border
+        cell.fill = header_fill
+        cell.font = Font(color=header_font_color, bold=True)
+
+    # Style the Vulnerability section row (row 9)
+    for cell in sheet[9]:
+        cell.border = thin_border
+        cell.fill = header_fill
+        cell.font = Font(color=header_font_color, bold=True)
+
+    # Define dictionary for sheets indicating column letter for category, status & IP (HARDCODED)
+    # Change if there are new columns added in the future
+
+    col_dict = {
+        "Compliance": ("AK", "AJ", "H"),
+        "Vulnerabilities": ("AK", "AJ", "H"),
+        "Open Ports": ("AK", "AJ", "H"),
+        "Users": ("AL", "AK", "H"),
+        "Installed Software": ("AL", "AK", "H"),
+        "BurpSuite Scan Results": ("K", "G", "A")
+    }
+
+    # --- Insert formulas for "Number of findings" (column E) ---
+    # Mapping: summary row index (1-based) -> (sheet, category)
+    findings_map = {
+        2:  ("Compliance", "Missing OS or Software Patch"),
+        3:  ("Compliance", "Inadequate Hardening"),
+        4:  ("Open Ports", "Unauthorised Open Port or Service or Devices"),
+        5:  ("Installed Software", "Unauthorised Software or File"),
+        6:  ("Compliance", "Unauthorised Network Shared Drive or Folder"),
+        7:  ("Users", "Excessive Privileged Account"),
+        8:  ("Compliance", "Approved ACMs not Implemented"),
+        10: ("Vulnerabilities", "End-of-Life OS or software"),
+        11: ("Vulnerabilities", "Software or Firmware Vulnerabilities"),
+        12: ("BurpSuite Scan Results", "Web-Based Vulnerabilities"),  # No formula, leave blank
+    }
+
+    # Formula for counting findings
+    for row_idx, (sheet_name, cat_value) in findings_map.items():
+        formula = (
+            f'=SUMPRODUCT(--(\'{sheet_name}\'!${col_dict[sheet_name][0]}$2:${col_dict[sheet_name][0]}$1000="{cat_value}"),'
+            f'--(\'{sheet_name}\'!${col_dict[sheet_name][1]}$2:${col_dict[sheet_name][1]}$1000<>"Declared"),'
+            f'--(\'{sheet_name}\'!${col_dict[sheet_name][1]}$2:${col_dict[sheet_name][1]}$1000<>"Closed"))'
+        )
+        sheet.cell(row=row_idx, column=5).value = formula
+
+    for row_idx, (sheet_name, cat_value) in findings_map.items():
+        ip_col = col_dict[sheet_name][2]
+        cat_col = col_dict[sheet_name][0]
+        # Build the array formula string as plain text (no =, no $)
+        formula = (
+            f"SUM(--(FREQUENCY("
+            f"IF('{sheet_name}'!{cat_col}2:{cat_col}1000=\"{cat_value}\", "
+            f"MATCH('{sheet_name}'!{ip_col}2:{ip_col}1000, '{sheet_name}'!{ip_col}2:{ip_col}1000, 0)), "
+            f"ROW('{sheet_name}'!{ip_col}2:{ip_col}1000)-ROW('{sheet_name}'!{ip_col}2)+1"
+            f")>0))"
+        )
+        # Insert as plain text (not a formula)
+        sheet.cell(row=row_idx, column=3).value = formula
+    
+    add_status_validation(sheet)
+    add_validation(sheet, [
+                "High",
+                "Medium",
+                "Low",
+                "-"
+            ], "Highest Cyber Severity", "-")
+    # create_table_and_style(sheet, "Summary", config.get("table", {}))
+
+
 
 def add_risk_font_formatting(sheet, sheet_options):
     """
@@ -374,7 +524,7 @@ def nessus_convert(csv_filename: str, excel_filename: str, logger=None, software
     
     All CSV-derived sheets are converted into Excel tables with header cells styled with a solid fill (RGB A5A5A5)
     with black text and full thin borders. Data validation is added so that the "Status" column only accepts
-    "-", "Open", "On-going", or "Closed". In Vulnerabilities, Compliance and Open Ports the host-lookup columns
+    "-", "Open", "Follow up", or "Closed". In Vulnerabilities, Compliance and Open Ports the host-lookup columns
     are filled with lookup formulas (using A1-style references to the Hosts sheet). For Users and Installed Software,
     the host-lookup columns are present and then overwritten with structured reference formulas.
     
@@ -475,19 +625,58 @@ def nessus_convert(csv_filename: str, excel_filename: str, logger=None, software
         hide_and_autowidth_columns(sheet, sheet_config.get("visible_columns", []), sheet_config.get("auto_width_columns", []))
         add_risk_font_formatting(sheet, sheet_config)
 
-    try:
-        wb.save(excel_filename)
-        if logger:
-            logger.info(f"Excel file created successfully at: {excel_filename}")
-    except Exception as e:
-        if logger:
-            logger.error(f"Error saving Excel file {excel_filename}: {e}")
+        # Add category dropdowns
+        if sheet_name == "Compliance":
+            add_validation(sheet, [
+                "Missing OS or Software Patch",
+                "Inadequate Hardening",
+                "Unauthorised Network Shared Drive or Folder",
+                "Approved ACMs not Implemented"
+            ], "Category")
+        elif sheet_name == "Vulnerabilities":
+            add_validation(sheet, [
+                "End-of-Life OS or software",
+                "Software or Firmware Vulnerabilities"
+            ], "Category")
+        elif sheet_name == "Users":
+            add_validation(sheet, [
+                "Excessive Privileged Account"
+            ], "Category", "Excessive Privileged Account")
+        elif sheet_name == "Open Ports":
+            add_validation(sheet, [
+                "Unauthorised Open Port or Service or Devices"
+            ], "Category", "Unauthorised Open Port or Service or Devices")
+        elif sheet_name == "Installed Software":
+            add_validation(sheet, [
+                "Unauthorised Software or File",
+            ], "Category", "Unauthorised Software or File")
 
+    create_summary_sheet(wb)
+    
+
+    return wb
+    # try:
+    #     wb.save(excel_filename)
+    #     if logger:
+    #         logger.info(f"Excel file created successfully at: {excel_filename}")
+    # except Exception as e:
+    #     if logger:
+    #         logger.error(f"Error saving Excel file {excel_filename}: {e}")
+
+
+
+# The blueprint used by nessus_convert() - All the defualt settings of how the Excel report should look and behave
 
 def generate_default_config():
     return  {
+    
+    # Defines what counts as an IP address (so hosts can be identified properly).
     "ip_regex": r"^((25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d|[Xx]{1,3})\.){3}(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d|[Xx]{1,3})$",
+    
+    #Enables duplicate row removal from the CSV.
     "remove_duplicates": True,
+
+    # Excel Table Styling
     "table": {
       "table_style": "TableStyleMedium9",
       "show_first_column": False,
@@ -502,47 +691,76 @@ def generate_default_config():
       "cell_border": "thin",
       "cell_font_color": "000000"
     },
+
+    # Status Formatting
     "status": {
       "status_map": {
         "-": "ffffff",
         "Open": "FFC7CE",
-        "On-going": "FFEB9C",
-        "Closed": "FFFFFF",
-        "Declared": "82F073"
+        "Follow up": "FFEB9C",
+        "Closed": "82F073",
+        "Declared": "8DB5F0"
       },
       "status_fill_type": "solid"
     },
+
+    # Hosts Sheet Configuration
     "hosts": {
       "sheet_name": "Hosts",
       "table_name": "Hosts",
       "headers": ["Hostname", "IP", "OS"],
       "visible_columns": ["Hostname", "IP", "OS"],
-      "ip_match": ["", 1, ""],
-      "not_ip_match": [1, "", ""]
+      "ip_match": ["", 1, ""],  # If the value is an IP → put it in the IP column.
+      "not_ip_match": [1, "", ""] # If not → treat it as a Hostname.
     },
+
+    #  This defines the extra columns that will be added to each of the excel sheet stated below (besides CSV columns):
     "sheet_options": {
       "host_column_name": "Host",
+
+    #   Add columns to the right after the "Risk" column
       "insert_mapping_columns_after": "Risk",
-      "mapping_columns": ["Hostname_original", "Hostname", "IP_original", "IP", "OS_original", "OS"],
+
+    # Add the following columns after the "Risk" column
+      "mapping_columns": ["Hostname_original", "Hostname", "IP_original", "IP", "OS_original", "OS"], 
+
+    # If the value is an IP --> put it in the IP_original column 
       "ip_match": ["", "", 1, "", "", ""],
+
+    #If the value is not an IP --> put it in the Hostname_original column
       "not_ip_match": [1, "", "", "", "", ""],
+
+    # The excel formula below makes use of the values within the Hostname_original, IP_original, and OS_original column to obtain the values
+    # within the Hostname, IP, and OS column
       "mapping_columns_formula": {
         "Hostname": "=IF(ISBLANK({Hostname_original_cell}), IF(ISBLANK(INDEX({hosts_table_name}!$A$2:$A${host_rows}, MATCH({IP_original_cell}, {hosts_table_name}!$B$2:$B${host_rows}, 0))), \"\", INDEX({hosts_table_name}!$A$2:$A${host_rows}, MATCH({IP_original_cell}, {hosts_table_name}!$B$2:$B${host_rows}, 0))), {Hostname_original_cell})",
         "IP": "=IF(ISBLANK({IP_original_cell}), IF(ISBLANK(INDEX({hosts_table_name}!$B$2:$B${host_rows}, MATCH({Hostname_original_cell}, {hosts_table_name}!$A$2:$A${host_rows}, 0))), \"\", INDEX({hosts_table_name}!$B$2:$B${host_rows}, MATCH({Hostname_original_cell}, {hosts_table_name}!$A$2:$A${host_rows}, 0))), {IP_original_cell})",
         "OS": "=IF(ISBLANK({OS_original_cell}), IF(ISBLANK(INDEX({hosts_table_name}!$C$2:$C${host_rows}, MATCH({ip_cell}, {hosts_table_name}!$B$2:$B${host_rows}, 0))), \"\", INDEX({hosts_table_name}!$C$2:$C${host_rows}, MATCH({ip_cell}, {hosts_table_name}!$B$2:$B${host_rows}, 0))), {OS_original_cell})"
       },
-      "additional_columns": {"Status": "Open", "Remarks": ""},
+
+    # The additional columns added after the OS column with the default value shown
+      "additional_columns": {"Status": "Open","Category": "", "Remarks": "", "Remediation Plan": "", "Estimated date of completion": ""},
+
       "headers_to_remove": ["Host"]
     },
+
+    # Config for each excel sheet
     "sheets": {
+        # Vulnerabilties Sheet 
       "vulnerabilities":{
         "sheet_name": "Vulnerabilities",
         "case_insensitive": True,
+
+        # Filters rows where Risk column matches these keywords below
         "filter": ["^None$", "^Low$", "^Medium$", "^High$", "^Critical$"],
         "column_filter_lookup": ["^Risk$"],
         "filter_exclude": [],
-        "visible_columns": ["Risk", "Hostname", "IP", "OS", "Name", "Synopsis", "Description", "Solution", "See Also", "Plugin Output", "Status", "Remarks"],
+
+        # Display only these columns within the Vulnerabilities Sheet
+        "visible_columns": ["Risk", "Hostname", "IP", "OS", "Name", "Synopsis", "Description", "Solution", "See Also", "Plugin Output", "Status", "Remarks", "Category", "Remediation Plan", "Estimated date of completion"],
         "auto_width_columns": [],
+
+        # Applies text coloring for the different risk levels filtered within the "Risk" column
         "text_format_column": "Risk",
         "text_format": {
           "Low": "0000FF",
@@ -551,42 +769,66 @@ def generate_default_config():
           "Critical": "8B0000"
         }
       },
+
+        # Compliance Sheet
       "compliance":{
         "sheet_name": "Compliance",
         "case_insensitive": True,
+
+        
+        # Filters rows where Risk column matches these keywords below
         "filter": ["^WARNING$", "^FAILED$"],
         "column_filter_lookup": ["^Risk$"],
         "filter_exclude": [],
-        "visible_columns": ["Risk", "Hostname", "IP", "OS", "Name", "Synopsis", "Description", "Solution", "See Also", "Plugin Output", "Status", "Remarks"],
+
+        # Display only these columns within the Compliance Sheet
+        "visible_columns": ["Risk", "Hostname", "IP", "OS", "Name", "Synopsis", "Description", "Solution", "See Also", "Plugin Output", "Status", "Remarks", "Category", "Remediation Plan", "Estimated date of completion"],
         "auto_width_columns": [],
+
+        # Applies text coloring for the different risk levels filtered within the "Risk" column
         "text_format_column": "Risk",
         "text_format": {
           "WARNING": "A0522D",
           "FAILED": "FF0000"
         }
       },
+
+
+     #  Open Ports Sheet
       "open_ports":{
         "sheet_name": "Open Ports",
         "case_insensitive": True,
+
+        # Filter rows where Name column matches these keywords below
         "filter": ["Netstat Portscanner \(SSH\)", "Netstat Portscanner \(WMI\)"],
         "column_filter_lookup": ["^Name$"],
         "filter_exclude": [],
-        "visible_columns": ["Hostname", "IP", "OS", "Protocol", "Port", "Status", "Remarks"],
+
+         # Display only these columns within the Open Ports Sheet
+        "visible_columns": ["Hostname", "IP", "OS", "Protocol", "Port", "Status", "Remarks", "Category", "Remediation Plan", "Estimated date of completion"],
         "auto_width_columns": []
       },
+
+    #   Users Sheet
       "users":{
         "sheet_name": "Users",
         "case_insensitive": True,
+
+         # Filter rows where Name column matches these keywords below
         "filter": ["^Linux User List Enumeration$", "^Enumerate Users via WMI$"],
         "column_filter_lookup": ["^Name$"],
         "filter_exclude": [],
-        "visible_columns": ["Hostname", "IP", "OS", "User", "Status", "Remarks"],
+
+         # Display only these columns within the Users Sheet
+        "visible_columns": ["Hostname", "IP", "OS", "User", "Status", "Remarks", "Category", "Remediation Plan", "Estimated date of completion"],
         "auto_width_columns": [],
+
         "extract_config": {
           "case_insensitive": True,
           "lookup_columns": ["^Name$"],
           "extract_columns": ["^Plugin Output$"],
           "extract_column_name": "User",
+
           "linux": {
               "lookup_values": ["^Linux User List Enumeration$"],
               "extraction": {
@@ -594,6 +836,7 @@ def generate_default_config():
                   "exclude": []
               }
           },
+
           "windows": {
               "lookup_values": ["^Enumerate Users via WMI$"],
               "extraction": {
@@ -601,16 +844,22 @@ def generate_default_config():
                   "exclude": ["no\.?\s*of\s*users"]
               }
           }
+
         }
 
       },
+
+    #   Installed Software Sheet
       "installed_software":{
         "sheet_name": "Installed Software",
         "case_insensitive": True,
+
+
         "filter": ["software enumeration"],
         "column_filter_lookup": ["^Name$"],
         "filter_exclude": ["identification", "startup", "start-up"],
-        "visible_columns": ["Hostname", "IP", "OS", "Installed Program", "Status", "Remarks"],
+        
+        "visible_columns": ["Hostname", "IP", "OS", "Installed Program", "Status", "Remarks", "Category", "Remediation Plan", "Estimated date of completion"],
         "auto_width_columns": [],
 
         "extract_config": {
@@ -618,6 +867,7 @@ def generate_default_config():
           "lookup_columns": ["^Name$"],
           "extract_columns": ["^Plugin Output$"],
           "extract_column_name": "Installed Program",
+
           "linux": {
               "lookup_values": ["ssh"],
               "extraction": {
@@ -625,6 +875,7 @@ def generate_default_config():
                   "exclude": ["list of packages", "^-+"]
               }
           },
+
           "windows": {
               "lookup_values": ["microsoft windows installed software enumeration"],
               "extraction": {
@@ -632,6 +883,7 @@ def generate_default_config():
                   "exclude": ["the following software"]
               }
           }
+
         }
       }
     }
