@@ -537,39 +537,95 @@ def nessus_convert(csv_filename: str, excel_filename: str, logger=None, software
          - Installed Software: ["Hostname", "IP", "OS", "Installed Programs", "Status", "Remarks"]
     """
     global IP_REGEX
+
+    """
+    If a config file path is provided, it reads it (JSON).
+    Extracts "excel_config" from it.
+    Merges it with a default config (so missing keys get defaults).
+    Otherwise, uses defaults only.
+    """
+
     if config_path:
         with open(config_path, "r") as f:
-            config = json.load(f).get("excel_config", {})
+            config = json.load(f).get("excel_config", {}) # deserializes a JSON document from a file-like object and returns a corresponding Python object
             config = {**generate_default_config(), **config}
     else:
         config = generate_default_config()
+
+
+    """
+    The setdefault() method returns the value of the item with the specified key.
+    If the key does not exist, insert the key, with the specified value,
+    """
+    # If a list of software_exclusion_keywords is given, they are added to the “installed_software” sheet’s filter_exclude list.
     
     if software_exclusion_keywords is not None:
         config.setdefault("sheets", {}).setdefault("installed_software", {}).setdefault("filter_exclude", []).extend(software_exclusion_keywords)
+
+
+
+
+    """
+    re.compile() pre-compiles a regular expression so Python doesn’t have to re-process the pattern every time you use it.
+    This regex matches:
+    - Valid IPv4 addresses (0–255 in each octet)
+    - IPv4 addresses that include wildcard segments using X or x
+
+    get() method returns the value of the item with the specified key.
+    If the specified key does not exist, return a default value.
+    """
+    # Defines a global regex to match IPv4 addresses.
+    # Uses the one from the config, or a default that allows X placeholders (like 192.168.X.X).
 
     IP_REGEX = re.compile(config.get("ip_regex", r"^((25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d|[Xx]{1,3})\.){3}(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d|[Xx]{1,3})$"))
 
     hosts_set = set()
     try:
         with open(csv_filename, newline="", encoding="utf-8") as csvfile:
-            reader = csv.DictReader(csvfile)
-            csv_header = reader.fieldnames
-            rows = list(reader)
-            
+
+            # Opens the CSV.
+
+            reader = csv.DictReader(csvfile)         # string describing the object's type, internal configuration (dialect), and memory address.
+            csv_header = reader.fieldnames           # retrieve a list of the column headers
+            rows = list(reader)                     #  iterates through the entire csv.DictReader object and consumes all its data, returning a complete list of dictionaries, where each dictionary represents a row from the CSV file. 
+
+
+            # If enabled, removes duplicate rows (via a helper function).
             if config.get("remove_duplicates", True):
                 rows = remove_duplicates(rows, csv_header)
-                
-            sheets = {sheet_name.get("sheet_name"): [] for sheet_name in config.get("sheets", {}).values()}
+
+            
+
+            """
+            # Prepares an empty list for each configured “sheet”.
+
+            config.get("sheets", {})
+            → Looks for the key "sheets" inside the config dictionary.
+            → If "sheets" doesn’t exist, it returns an empty dictionary {} (the default value).
+
+            .values()
+            → Returns all the values from that "sheets" dictionary (not the keys).
+            """
+
+            sheets = {sheet_name.get("sheet_name"): [] for sheet_name in config.get("sheets", {}).values()} 
+            
+            # Collects hostnames or IPs into a hosts_set (unique).
             for row in rows:
                 host_val = row.get(config.get("host_column_name", "Host"), "").strip()
                 if host_val:
                     hosts_set.add(host_val)
                 
+            # Each sheet can define:
+            # Which columns to check (column_filter_lookup)
+            # Which patterns to include (filter)
+            # Which patterns to exclude (filter_exclude)
+            # Whether matching should be case-insensitive.
+
                 for sheet_config in config.get("sheets", {}).values():
                     sheet_name = sheet_config.get("sheet_name")
                     regex_flags = re.IGNORECASE if sheet_config.get("case_insensitive", False) else 0
 
-                    # Compile the patterns
+                    # Compiles all regexes for performance and cleaner logic.
                     compiled_col_filter_patterns = [re.compile(pat, regex_flags) for pat in sheet_config.get("column_filter_lookup", [])]
                     compiled_filter_patterns = [re.compile(pat, regex_flags) for pat in sheet_config.get("filter", [])]
                     compiled_filter_exclude_patterns = [re.compile(pat, regex_flags) for pat in sheet_config.get("filter_exclude", [])]
@@ -577,6 +633,11 @@ def nessus_convert(csv_filename: str, excel_filename: str, logger=None, software
                     # Helper function: returns True if any pattern in the list matches the text
                     def matches_any(patterns, text):
                         return any(pattern.search(text) for pattern in patterns)
+
+                    # For each column in the row that matches the “column_filter_lookup” patterns:
+                    # If the value matches at least one “filter” pattern
+                    # AND doesn’t match any “filter_exclude” pattern
+                    # → Then include this row under that sheet.
 
                     if any(
                         matches_any(compiled_filter_patterns, value) and not matches_any(compiled_filter_exclude_patterns, value)
@@ -586,17 +647,19 @@ def nessus_convert(csv_filename: str, excel_filename: str, logger=None, software
         
     except Exception as e:
         if logger:
-            logger.error(f"Error reading CSV file {csv_filename}: {e}")
+            logger.error(f"Error reading CSV file {csv_filename}: {e}") # Logs any file read or parse errors.
         return
 
-    # --- Step 2. Create workbook and Hosts sheet ---
+    # # --- Step 2. Create workbook and Hosts sheet ---
     wb = Workbook()
     default_sheet = wb.active
     wb.remove(default_sheet)
 
-    hosts_sheet = wb.create_sheet(config.get("hosts", {}).get("sheet_name", "Hosts"))
-    hosts_header = config.get("hosts", {}).get("headers", ["Hostname", "IP", "OS"])
-    hosts_sheet.append(hosts_header)
+    # Go to config to find the key "hosts". If existed, print the subdictionary within the hosts key, otherwise print {}. WIthin the subdictionary, find the key "sheet_name" and get the value.
+    # Otherwise the default value is "Hosts".  
+    hosts_sheet = wb.create_sheet(config.get("hosts", {}).get("sheet_name", "Hosts")) #hosts_sheet = Hosts (Excel Sheet name is called "Hosts")
+    hosts_header = config.get("hosts", {}).get("headers", ["Hostname", "IP", "OS"]) #hosts_header= ["Hostname", "IP", "OS"] (Headers for the Excel Sheet "Hosts")
+    hosts_sheet.append(hosts_header) #Append the headers onto  the Hosts sheet
     for host in sorted(hosts_set):
         if IP_REGEX.match(host):
             row = config.get("hosts", {}).get("ip_match", ["", 1, ""])[:]
@@ -655,6 +718,7 @@ def nessus_convert(csv_filename: str, excel_filename: str, logger=None, software
     
 
     return wb
+
     # try:
     #     wb.save(excel_filename)
     #     if logger:
@@ -757,6 +821,7 @@ def generate_default_config():
         "filter_exclude": [],
 
         # Display only these columns within the Vulnerabilities Sheet
+        
         "visible_columns": ["Risk", "Hostname", "IP", "OS", "Name", "Synopsis", "Description", "Solution", "See Also", "Plugin Output", "Status", "Remarks", "Category", "Remediation Plan", "Estimated date of completion"],
         "auto_width_columns": [],
 
@@ -782,6 +847,7 @@ def generate_default_config():
         "filter_exclude": [],
 
         # Display only these columns within the Compliance Sheet
+      
         "visible_columns": ["Risk", "Hostname", "IP", "OS", "Name", "Synopsis", "Description", "Solution", "See Also", "Plugin Output", "Status", "Remarks", "Category", "Remediation Plan", "Estimated date of completion"],
         "auto_width_columns": [],
 
@@ -805,6 +871,7 @@ def generate_default_config():
         "filter_exclude": [],
 
          # Display only these columns within the Open Ports Sheet
+ 
         "visible_columns": ["Hostname", "IP", "OS", "Protocol", "Port", "Status", "Remarks", "Category", "Remediation Plan", "Estimated date of completion"],
         "auto_width_columns": []
       },
@@ -820,19 +887,33 @@ def generate_default_config():
         "filter_exclude": [],
 
          # Display only these columns within the Users Sheet
+   
         "visible_columns": ["Hostname", "IP", "OS", "User", "Status", "Remarks", "Category", "Remediation Plan", "Estimated date of completion"],
         "auto_width_columns": [],
 
         "extract_config": {
+        
+          # Makes all regex lookups and matches case-insensitive.
           "case_insensitive": True,
-          "lookup_columns": ["^Name$"],
+          
+          #Tells the script which column(s) to look at to decide what kind of extraction rule to apply.
+        # “Look inside the Name column — that’s where you’ll find the plugin title
+        # like Linux User List Enumeration or Enumerate Users via WMI.”
+          "lookup_columns": ["^Name$"], 
+
+          #Once you know which rule to apply, extract data from the Plugin Output column.
           "extract_columns": ["^Plugin Output$"],
+          
+          # Defines the destination column to store the parsed results.
           "extract_column_name": "User",
 
           "linux": {
               "lookup_values": ["^Linux User List Enumeration$"],
               "extraction": {
-                  "regex": ["^User\s*:\s*(.+)$"],
+                  # #treats each match as a separate entry,
+                  #so each user becomes a new row under the “User” sheet, preserving Hostname/IP context.
+
+                  "regex": ["^User\s*:\s*(.+)$"], 
                   "exclude": []
               }
           },
@@ -840,7 +921,11 @@ def generate_default_config():
           "windows": {
               "lookup_values": ["^Enumerate Users via WMI$"],
               "extraction": {
-                  "regex": ["^Name\s*:\s*(.+)$"],
+                  
+                  # #treats each match as a separate entry,
+                  #so each user becomes a new row under the “User” sheet, preserving Hostname/IP context.
+
+                  "regex": ["^Name\s*:\s*(.+)$"], 
                   "exclude": ["no\.?\s*of\s*users"]
               }
           }
@@ -854,33 +939,55 @@ def generate_default_config():
         "sheet_name": "Installed Software",
         "case_insensitive": True,
 
-
+        # Include only rows where the Name column contains “software enumeration”.
         "filter": ["software enumeration"],
         "column_filter_lookup": ["^Name$"],
+
+        # From those rows, exclude any that also mention “identification”, “startup”, or “start-up”.
         "filter_exclude": ["identification", "startup", "start-up"],
         
         "visible_columns": ["Hostname", "IP", "OS", "Installed Program", "Status", "Remarks", "Category", "Remediation Plan", "Estimated date of completion"],
+     
+     
         "auto_width_columns": [],
 
         "extract_config": {
           "case_insensitive": True,
+
+        # Look up the Name column  
           "lookup_columns": ["^Name$"],
-          "extract_columns": ["^Plugin Output$"],
-          "extract_column_name": "Installed Program",
+
+
+          "extract_columns": ["^Plugin Output$"], # Extract data from the Plugin Output column after identifying the condition
+          
+          "extract_column_name": "Installed Program", # Saved the extracted data to the Installed Program column
+
+
+        # For Linux hosts, extract every line from the Plugin Output except:
+        # --> Lines that just say “list of packages,” and
+        # --> Lines made of dashes.
 
           "linux": {
+            #   If the value in the name column contain the word "ssh""
               "lookup_values": ["ssh"],
               "extraction": {
-                  "regex": [".*"],
-                  "exclude": ["list of packages", "^-+"]
+                  "regex": [".*"], # Match the whole line, whatever it is
+                  "exclude": ["list of packages", "^-+"] # skip lines containing the phrase "list of packages" and lines made only of dashes
               }
           },
 
+        #   For Windows hosts, only extract lines mentioning “installed on,”
+        #   and ignore generic text like “the following software.”
+
           "windows": {
+              # If the value in the name column contain the phrase "microsoft windows installed software enumeration"
               "lookup_values": ["microsoft windows installed software enumeration"],
               "extraction": {
+                #   Match only lines that contain the phrase “installed on”, anywhere in the line.
                   "regex": [".*installed on.*"],
-                  "exclude": ["the following software"]
+
+                #   Skip lines containing that phrase "the following software"
+                  "exclude": ["the following software"] 
               }
           }
 
