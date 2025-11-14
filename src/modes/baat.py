@@ -7,8 +7,8 @@ from tkinter import Tk, Toplevel, filedialog, messagebox, Label, Entry, Button, 
 from tkinter.simpledialog import askstring
 from bs4 import BeautifulSoup
 from urllib.parse import unquote
-from excel_standard_styles import HEADER_FONT, CENTER_ALIGN, TOP_ALIGN, ALL_BORDERS_STYLES #Import the header font, borders, center and top alignment styles from excel_standard_styles.py
-from results_summary import add_summary_to_excel #Import add_summary_to_excel() function from results_summary.py
+from modes import excel_standard_styles #Import the header font, borders, center and top alignment styles from excel_standard_styles.py
+from modes import results_summary #Import add_summary_to_excel() function from results_summary.py
 from datetime import datetime
 import sys
 import html
@@ -94,8 +94,8 @@ def header_formatting(ws, headers, header_fill):
     for col in range(1, len(headers) + 1):
         cell = ws.cell(row=1, column=col)
         cell.fill = header_fill
-        cell.font = HEADER_FONT
-        cell.alignment = CENTER_ALIGN
+        cell.font = excel_standard_styles.HEADER_FONT
+        cell.alignment = excel_standard_styles.CENTER_ALIGN
 
 # Clean up the raw data obtained from the XML File stored for each vulnerability finding and its solution
 def clean_html(html_text):
@@ -132,7 +132,7 @@ def clean_html(html_text):
 def border_design(ws):
     for row in ws.iter_rows(min_row=1, max_row=ws.max_row, min_col=ws.min_column, max_col=ws.max_column):
         for cell in row:
-            cell.border = ALL_BORDERS_STYLES
+            cell.border = excel_standard_styles.ALL_BORDERS_STYLES
 
 # Add dropdowns only to rows where status is not "N.A."
 def add_status_dropdown_options(ws, status_options):
@@ -240,19 +240,19 @@ def generate_burp_report(burp, wb=None, standalone=False):
                 for row in range(2, ws.max_row + 1):
                     cell = ws.cell(row=row, column=col_number)
                     if cell.value != "N.A":
-                        cell.alignment = TOP_ALIGN # Wrap text for cells in Column E and F if the cell value is not "N.A."
+                        cell.alignment = excel_standard_styles.TOP_ALIGN # Wrap text for cells in Column E and F if the cell value is not "N.A."
                     else: 
-                        cell.alignment = CENTER_ALIGN #Otherwise, if the cell value is "N.A", center align Column E and Column F.
+                        cell.alignment = excel_standard_styles.CENTER_ALIGN #Otherwise, if the cell value is "N.A", center align Column E and Column F.
             else:
                 # Apply center alignment to selected columns below
                 for col_number in [1, 2, 3, 4, 7, 9, 11]:
                     for row in range(2, ws.max_row + 1):
-                        ws.cell(row=row, column=col_number).alignment = CENTER_ALIGN
+                        ws.cell(row=row, column=col_number).alignment = excel_standard_styles.CENTER_ALIGN
                 
                 # Apply top alignment to selected columns below
                 for col_number in [8, 10]:
                     for row in range(2, ws.max_row + 1):
-                        ws.cell(row=row, column=col_number).alignment = TOP_ALIGN
+                        ws.cell(row=row, column=col_number).alignment = excel_standard_styles.TOP_ALIGN
 
                 #Autosize Columns (except Column E and Column F)                    
                 for cell in col:
@@ -275,7 +275,7 @@ def generate_burp_report(burp, wb=None, standalone=False):
         
         # Add a new sheet called "Vulnerabilities Summary Count" to summarise the number of vulnerabiltiies recorded via severity. (PASS workbook object to function)
         if standalone:
-            add_summary_to_excel(wb)
+            results_summary.add_summary_to_excel(wb)
 
         return wb
         #Save to user-defined location

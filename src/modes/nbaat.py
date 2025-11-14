@@ -2,7 +2,7 @@ import tkinter as tk
 import time
 import re
 import sys
-import convert, baat
+from modes import convert, baat
 from tkinter import filedialog, messagebox
 from openpyxl import Workbook
 

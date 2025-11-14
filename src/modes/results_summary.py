@@ -3,7 +3,7 @@
 
 from openpyxl.styles import PatternFill
 from collections import Counter
-from excel_standard_styles import HEADER_FONT, CENTER_ALIGN, ALL_BORDERS_STYLES #Import the header font, borders and center alignment styles from excel_standard_styles.py
+from modes import excel_standard_styles #Import the header font, borders and center alignment styles from excel_standard_styles.py
 
 # Define a different header fill color for the summary sheet
 SUMMARY_HEADER_FILL = PatternFill(fill_type="solid", start_color="FFD966", end_color="FFD966")  # Light orange
@@ -29,14 +29,14 @@ def add_summary_to_excel(wb):
     # Define header and apply the styles
     summary_ws.append(["Severity", "Count"])
     for cell in summary_ws[1]:
-        cell.font = HEADER_FONT
-        cell.alignment = CENTER_ALIGN
-        cell.border = ALL_BORDERS_STYLES
+        cell.font = excel_standard_styles.HEADER_FONT
+        cell.alignment = excel_standard_styles.CENTER_ALIGN
+        cell.border = excel_standard_styles.ALL_BORDERS_STYLES
         cell.fill = SUMMARY_HEADER_FILL  # Use custom fill
 
     # Add the count for each severity and apply the styles 
     for i, severity in enumerate(["High", "Medium", "Low", "Information"], start=2):
         summary_ws.append([severity, severity_counts.get(severity, 0)])
         for cell in summary_ws[i]:
-            cell.alignment = CENTER_ALIGN
-            cell.border = ALL_BORDERS_STYLES
+            cell.alignment = excel_standard_styles.CENTER_ALIGN
+            cell.border = excel_standard_styles.ALL_BORDERS_STYLES
