@@ -18,19 +18,38 @@ urllib3.disable_warnings(InsecureRequestWarning)
 
 def add_mode_arguments(parser):
     """Add mutually exclusive mode arguments."""
-    mode = parser.add_mutually_exclusive_group(required=False)
+    mode = parser.add_mutually_exclusive_group(required=False) # creates a group of arguments where only one argument from that group can be present on the command line when the script is executed. 
     modes = {
         "-i": ("--import", "import_mode", "Import mode"),
         "-e": ("--export", "export_mode", "Export mode"),
         "-c": ("--convert", "convert_mode", "Convert mode"),
         "-x": ("--combine", "combine_mode", "Combine mode"),
     }
+
+    """
+    # dest --> Store the result in args.import_mode, args.export_mode, args.convert_mode, args.combine_mode
+    
+    # action="store_true" --> Sets the variable to True when the flag is present
+    # If the user uses the flag, store True
+    # If the user does not use the flag, store False
+    
+    # help= Description shown when user type python main.py --help
+
+    # At any one time:
+    # --> ONE mode = True
+    # --> The other THREE modes = False
+
+    """
+
     for short, (long, dest, help_text) in modes.items():
         mode.add_argument(short, long, dest=dest, action="store_true", help=help_text)
         
         
 def add_nessus_arguments(parser):
     """Add arguments for Nessus server settings."""
+    
+    # add_argument_group create a new group that stores arguments.
+    # After creating the group, you use add_argument() on the returned group object to add arguments to that specific section.
     nessus_group = parser.add_argument_group("Nessus Server Settings")
     nessus_group.add_argument("-u", "--nessus-url", help="Base URL of the Nessus server")
     nessus_group.add_argument("-a", "--api-token", help="API token for authentication")
@@ -39,6 +58,9 @@ def add_nessus_arguments(parser):
 
 def add_general_arguments(parser):
     """Add general arguments applicable to all modes."""
+    
+    # add_argument_group create a new group that stores arguments.
+    # After creating the group, you use add_argument() on the returned group object to add arguments to that specific section.
     general_group = parser.add_argument_group("General Settings")
     general_group.add_argument("-v", "--verbose", action="store_true", help="Enable verbose logging")
     general_group.add_argument("-t", "--threads", type=int, default=1, help="Number of threads. Only for Import and Export modes (Untested)")
@@ -57,6 +79,10 @@ def add_general_arguments(parser):
 
 def add_mode_specific_arguments(parser):
     """Add mode-specific arguments for import, export, convert, and combine modes."""
+
+    # add_argument_group create a new group that stores arguments.
+    # After creating the group, you use add_argument() on the returned group object to add arguments to that specific section.
+
     import_group = parser.add_argument_group("Import Mode Settings")
     import_group.add_argument("--upload-folder", help="Folder name for scan uploads")
 
@@ -78,9 +104,12 @@ def add_mode_specific_arguments(parser):
 
 def load_config(args):
     """Load settings from a configuration file."""
+
+    # If no --config file was provided, do nothing.
     if not args.config:
         return
 
+    # Loads the config json file and all settings inside the config file into the dictionary config.
     with open(args.config, 'r') as f:
         config = json.load(f)
 
@@ -91,19 +120,24 @@ def load_config(args):
         "convert": "convert_mode",
         "combine": "combine_mode"
     }
-    
-    if "mode" in config:
-        mode_key = config["mode"].lower()
-        if mode_key in mode_mapping:
-            setattr(args, mode_mapping[mode_key], True)
 
-    # Load other configurations dynamically
+    """
+    set the arg.import_mode/args.export_mode/args.convert_mode/args.combine_mode = True
+    """
+    if "mode" in config: # Refer to the json files combine, convert, export, and import in the configs folder. There is a mode key with value - combine, convert, export, import
+        mode_key = config["mode"].lower() # convert the value of the key to lowercase
+        if mode_key in mode_mapping:
+            setattr(args, mode_mapping[mode_key], True)  # mode_mapping[mode_key] value may be import_mode, export_mode, convert_mode, combine_mode
+
+
+    # Load other configurations that are in the JSON file dynamically, and set them as args.xxx = (value)
     for key, value in config.items():
         if hasattr(args, key):
             setattr(args, key, value)
-            
+        
+
     if args.software_exclusion_keywords and type(args.software_exclusion_keywords) == list:
-        args.software_exclusion_keywords = ",".join(args.software_exclusion_keywords)
+        args.software_exclusion_keywords = ",".join(args.software_exclusion_keywords) # If a field is a list, convert it to a comma-separated string
 
 
 def prompt_user_for_missing_args(args, logger):
@@ -113,6 +147,17 @@ def prompt_user_for_missing_args(args, logger):
         "c": "convert_mode",
         "x": "combine_mode"
     }
+
+    """If none of the parameters -i, -e, -c, -x have been selected, default value will be False.
+    Therefore any() will be False also. 
+    Since if not False = if True, the program will run the get_non_blank_input function to ask user for options.
+    Once an option is chosen (I/E/C/X), the setattr() will set import_mode/export_mode/convert_mode/combine_mode to True and move to the next function. 
+    If the option is none of the four above, the error "Invalid option..."" will be printed.
+
+    Note: 
+    logger.info messages WILL NOT BE PRINTED OUT ON THE EXE.
+    ONLY logger.error WILL BE PRINTED OUT ON THE EXE.
+    """
 
     if not any(getattr(args, mode, False) for mode in mode_map.values()):
         while True:
@@ -124,7 +169,7 @@ def prompt_user_for_missing_args(args, logger):
             
     if args.import_mode or args.export_mode:
         while True:
-            if not args.nessus_url:
+            if not args.nessus_url:  
                 args.nessus_url = get_user_input_with_default("Enter the Nessus Web Server URL (e.g. https://localhost:8834) [https://localhost:8834]: ", logger=logger, default="https://localhost:8834")
             if not (args.nessus_url.startswith("http://") or args.nessus_url.startswith("https://")):
                 args.nessus_url = "https://" + args.nessus_url
@@ -334,15 +379,32 @@ def prompt_user_for_missing_args(args, logger):
 
 def parse_args(logger):
     """Main function to parse arguments and handle config files."""
+
+    """
+    #  Creates the parser. This object will store all allowed arguments.
+    #  It handles ALL argument logic, such as:
+    # required vs optional arguments
+    # mutually exclusive arguments
+    # flag arguments (--import)
+    # value arguments (--file filename.txt)
+    # help message generation (--help)
+    """
     parser = argparse.ArgumentParser(description="Nessus Import/Export Tool")
 
-    # Add argument groups
+    # Add argument groups for these functions to the same parser.
     add_mode_arguments(parser)
     add_nessus_arguments(parser)
     add_general_arguments(parser)
     add_mode_specific_arguments(parser)
 
+    """
+    # parse_args() reads the arguments typed on the command line, 
+    # matches them to the arguments you defined, validates them, 
+    # and then returns an object (args) containing their values.
+    """
+
     args = parser.parse_args()
+
 
     print(get_authors())
     print(get_ascii_art())
@@ -356,15 +418,20 @@ def parse_args(logger):
     return args
 
 
+
+
+
 def main():
-    # Set up logging.
+    # Set up logging. Configures logging so your script can print messages
     logging.basicConfig(
         format="%(asctime)s [%(levelname)s] %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S"
     )
+
+    # Creates a logger object, to other functions so they can print messages consistently.
     logger = logging.getLogger(__name__)
 
-    args = parse_args(logger)
+    args = parse_args(logger) #pass the logger into parse_args() function so the function can log things if needed.
     
     if args.verbose:
         logger.info("Verbose logging enabled")

@@ -65,6 +65,13 @@ def get_all_text(element):
     return ''.join(element.itertext())
 
 
+"""
+If password = False, set an input() for user prompt. The input will be stored in the value variable.
+If password = True, get the user input typed that is stored in value variable. 
+If there is no input, print "Input cannot be blank. Please try again."
+If there is an input, return the value variable. 
+"""
+
 def get_non_blank_input(prompt, password=False, validate=None, logger=None):
     """Prompt the user until a non-blank input is provided."""
     while True:
