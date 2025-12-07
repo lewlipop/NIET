@@ -22,7 +22,7 @@ class NessusAPI:
         return self.api_token
     
     def set_token(self, token):
-        self.token = token
+        self.token = token  # Set the Nessus Login Token
     
     def set_api_token(self, api_token):
         self.api_token = api_token
@@ -44,23 +44,46 @@ class NessusAPI:
         return True
         
     def set_json_header(self):
-        """Enable the application/json Content-Type header."""
+        """Enable the application/json Content-Type header.
+        
+        Adds this HTTP header.
+        When you send a POST request with JSON, servers require the correct content type so they know how to parse the body.
+        
+        """
         self.session.headers["Content-Type"] = "application/json"
 
     def remove_json_header(self):
-        """Remove the application/json Content-Type header."""
+        """Remove the application/json Content-Type header.
+
+        Removes the Content-Type header from the session.
+
+        """
         self.session.headers.pop("Content-Type", None)
         
     def login_nessus(self):
-        """Log in to Nessus and return the session token."""
+        """Log in to Nessus and return the session token.
+        
+        Logs in to the Nessus Web API.
+
+        """
         try:
-            self.set_json_header()
-            login_url = f"{self.base_url.rstrip('/')}/session"
-            payload = {"username": self.username, "password": self.password}
+            self.set_json_header() # Adds the JSON Header
+            login_url = f"{self.base_url.rstrip('/')}/session"      # Nessus’s login API endpoint.
+            payload = {"username": self.username, "password": self.password}  # what Nessus expects when logging in.
+
+            # Sends username + password
+            # Sends as JSON automatically
+            # SSL verification depends on self.verify
+            # Will timeout after 10 seconds
+            
             response = requests.post(login_url, json=payload, verify=self.verify, timeout=10)
+            
+            # If it's between 200–299 (successful responses), the method does nothing.
+            # If it's a 4xx (client error) or 5xx (server error), it raises an HTTPError with details of the failed request.
             response.raise_for_status()
+            
             data = response.json()
-            token = data.get("token")
+            token = data.get("token") # The token is used for all future authenticated API requests.
             if not token:
                 return None
             return token
@@ -103,34 +126,55 @@ class NessusAPI:
             return False
         
     def get_api_token_automatically(self):
-        """Get the API token from the Nessus server."""
+        """Get the API token from the Nessus server.
+        
+        This function tries to scrape the static API token from Nessus’s web interface by:
+
+        - loading the Nessus webpage
+        -finding the path to the JavaScript file
+        - downloading that JavaScript
+        - extracting the API token text embedded inside
+        - This is a hack used for automation in older Nessus versions.
+        
+        """
         try:
-            nessus_page = requests.get(self.base_url, verify=self.verify, timeout=5)
+            nessus_page = requests.get(self.base_url, verify=self.verify, timeout=5) 
             nessus_page.raise_for_status()
-            nessus_page_text = nessus_page.text
+            nessus_page_text = nessus_page.text # Reads the HTML to retrieve the raw content of an HTTP response in string format. 
             
+            # Extract the version (v=1234567) number from HTML
+            # scans the entire string for the first occurrence of the pattern
+            # If a match is found, it returns a MatchObject.
+            # If no match is found, it returns None
             match = re.search(r'nessus6\.js\?v=(\d+)', nessus_page_text)
+
+
             if not match:
                 self.logger.error("Could not find the 'v' parameter in the HTML.")
                 return None
                 
+            # match.group(1): Returns the string matched by the first capturing group. 
             v_param = match.group(1)
             self.logger.debug(f"Extracted v parameter: {v_param}")
             
-            nessus_js_url = f"{self.base_url}/nessus6.js?v={v_param}"
-            nessus_js_response = requests.get(nessus_js_url, verify=self.verify, timeout=5)
+            nessus_js_url = f"{self.base_url}/nessus6.js?v={v_param}" # Build the JS file URL using the version number
+            nessus_js_response = requests.get(nessus_js_url, verify=self.verify, timeout=5) # Download the nessus6.js JavaScript file - This JS contains functions used by the Nessus UI.
             nessus_js_response.raise_for_status()
             nessus_js_text = nessus_js_response.text
             
+            """
+            Search inside that JavaScript for the API token
+            The JS usually contains something like: key: "getApiToken", value: function() { return "abcdef123456789"; }
+            """
             token_match = re.search(r'key:\s*"getApiToken",\s*value:\s*function\(\)\s*{\s*return\s*"([^"]+)"', nessus_js_text)
             
             if not token_match:
                 self.logger.error("Could not find the 'getApiToken' function in the JavaScript file.")
                 return None
             
-            api_token = token_match.group(1)
+            api_token = token_match.group(1) # Function extracts abcdef123456789
             self.logger.debug(f"Extracted API token: {api_token}")
-            self.api_token = api_token
+            self.api_token = api_token # Store the token
             return True
             
         except Exception as e:
@@ -169,15 +213,30 @@ class NessusAPI:
         """
         Retrieve the list of folders from Nessus.
         Returns a dictionary mapping folder names to folder IDs.
+
+        Connects to the Nessus API
+        Requests a list of scan folders
+        Extracts the folder names and IDs
+        Returns them as a Python dictionary
+
+        Sample Output:
+        
+        {
+        "My Scans": 1,
+        "Policies": 3,
+        "Imported": 7
+        }
+
         """
         try:
-            url = f"{self.base_url.rstrip('/')}/folders"
-            resp = self.session.get(url, verify=self.verify, timeout=10)
+            url = f"{self.base_url.rstrip('/')}/folders" # Builds the API URL for getting folders
+            resp = self.session.get(url, verify=self.verify, timeout=10) # Sends a GET request to Nessus
             resp.raise_for_status()
-            data = resp.json()
+            data = resp.json() # Converts the JSON response into a Python dictionary
             folders = data.get("folders", [])
             self.logger.debug(f"Retrieved {len(folders)} folders from Nessus")
             return {folder["name"]: folder["id"] for folder in folders}
+
         except Exception as e:
             self.logger.error(f"Error retrieving folders: {e}")
             return {}

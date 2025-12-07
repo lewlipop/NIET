@@ -17,34 +17,36 @@ def choose_folder_interactively(nessus_api, folders):
     """
     print_folders = True
     while True:
-        if folders:
+        if folders: # When folders are present 
             if print_folders:
-                folder_list = sorted(folders.items(), key=lambda x: x[0].lower())
+                folder_list = sorted(folders.items(), key=lambda x: x[0].lower()) # Sort the folders dictionary
                 print("Available Folders:")
-                for idx, (fname, _) in enumerate(folder_list, start=1):
+                for idx, (fname, _) in enumerate(folder_list, start=1): # Start the folders from ID 1
                     print(f"  {idx}. {fname}")
             folder_input = get_non_blank_input("Enter the folder name or number to use (Enter a new name to create the folder): ", logger=nessus_api.get_logger())
-        else:
+        else: # When no folders are found
             nessus_api.get_logger().error("No folders found on the Nessus server.")
             folder_input = get_non_blank_input("Enter a new folder name to create: ", logger=nessus_api.get_logger())
+            # proceed to the else statement flow
         
         print_folders = True
 
         # If there are folders and input is a number, select from the list.
         if folder_input.isdigit() and folders:
             idx = int(folder_input)
-            if 1 <= idx <= len(folder_list):
+            if 1 <= idx <= len(folder_list): #If the folder number is within the available folder number range
                 selected = folder_list[idx - 1]
                 nessus_api.get_logger().info(f"Using existing folder '{selected[0]}' (ID: {selected[1]}).")
                 return selected[1]
-            else:
+            else: # If the folder number written is not within the available folder number range
                 if get_user_confirmation(f"Could not find folder number {folder_input}. Do you want to create the folder named {folder_input}? (y/N): ", default=False):
                     folder_id = nessus_api.create_folder(folder_input)
                     if not folder_id:
                         sys.exit(1)
                     return folder_id
 
-        else:
+
+        else: #
             if not re.match(r'^[A-Za-z0-9\s_-]+$', folder_input):
                 nessus_api.get_logger().error("Invalid folder name. Only alphabets, numbers, dashes, spaces, and underscores are allowed.")
                 print_folders = False

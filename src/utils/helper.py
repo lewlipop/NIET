@@ -74,6 +74,10 @@ If there is an input, return the value variable.
 
 def get_non_blank_input(prompt, password=False, validate=None, logger=None):
     """Prompt the user until a non-blank input is provided."""
+    # getpass.getpass() function in Python securely prompts a user 
+    # for a password or other sensitive information without echoing their input to the console.
+    # Use it to read sensitive input from users on supported terminals without exposing typed characters.
+    
     while True:
         value = getpass.getpass(prompt).strip() if password else input(prompt).strip()
         if value:

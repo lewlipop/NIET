@@ -479,18 +479,19 @@ def main():
             username = get_non_blank_input("Enter your Nessus username: ", logger=logger)
             password = get_non_blank_input("Enter your Nessus password: ", password=True, logger=logger)
         
-        nessus_api.set_credentials(username, password)
-        token = nessus_api.login_nessus()
+        nessus_api.set_credentials(username, password) # set the username and password
+        token = nessus_api.login_nessus() # Login to Nessus Web Client with the username and password, obtain the token for the login
         
-        if token:
-            nessus_api.set_token(token)
+        if token: # If a token is received
+            nessus_api.set_token(token) # Set the Nessus Login token
             logger.info("Login successful. Proceeding...")
             break
-        else:
-            if attempt == max_attempts:
+        else: #If no login token is being obtained
+
+            if attempt == max_attempts: #If this is your last try, you will get locked out.
                 logger.error(f"Login failed after {max_attempts} attempts")
                 sys.exit(1)
-            else:
+            else: # Retype your username and password again
                 logger.error(f"Login attempt {attempt}/{max_attempts} failed. Please try again")
                 
                 if args.config and args.username and args.password:
@@ -505,6 +506,9 @@ def main():
                         args.password = get_non_blank_input("Enter your Nessus password: ", password=True, logger=logger)
                 
 
+    """
+    After typing the correct username and password, users will have to obtain an API token.
+    """
     if (args.import_mode or args.export_mode) and not args.api_token:
         if get_user_confirmation("Would you like to attempt to get an API token automatically? (Y/n): ", default=True):
             if not nessus_api.get_api_token_automatically():
