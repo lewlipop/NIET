@@ -128,7 +128,11 @@ def get_user_confirmation(prompt, default=None):
         if value in ["n", "no"] or (default is False and value == ""):
             return False
         
-        
+# os.walk() method generates the file and directory names in a directory tree by walking the tree using top-down or bottom-up approach.
+
+# os.listdir() method in Python is used to get the list of all files and directories in the specified directory.
+# If we don’t specify any directory, then a list of files and directories in the current working directory will be returned.
+
 def check_min_nessus_files(directory, min_files=1, file_extension=".nessus", recursive=True):
     """Check if there are any .nessus files in the directory."""
     nessus_files = []

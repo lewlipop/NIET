@@ -181,20 +181,35 @@ def prompt_user_for_missing_args(args, logger):
             else:
                 logger.info(f"Connection to {args.nessus_url} successful")
                 break
-        
+    
+
+    """
+    Ask users to specify if it is a filepath or directory (default value is directory).
+    If the user specify a directory (with the inputs "d" or "directory"), they will have to enter the directory containing the .nessus files
+    (default will be the current directory).
+    If the user specify a filepath (with the inputs "f" or "filepaths), they will have to enter the filepaths. If they have finished entering the filepath, they can press Enter on a blank line to finish.
+    """
+    
     if args.import_mode or args.combine_mode:
         while True:
-            # --- Ask the user to choose input type if neither exists ---
+            # --- Ask the user to choose input type whether is it a Directory or Filepath. If no value is given, the default value "Directory" will be given.  ---
             if args.directory is None and args.filepaths is None:
                 choice = get_user_input_with_default(
                     "Would you like to specify a Directory (D) or Filepaths (F)? [Directory]: ",
                     logger=logger, default="directory").lower().strip()
+                
+                # A directory (folder) is a container that holds files. 
+                # If the user enter "d" or "directory",
+                # Default value will be to take the current working directory if no directory is being specified. The directory will then be stored in the args.directory variable.
                 if choice in ["d", "directory"]:
                     dir_input = get_user_input_with_default(
                         "Enter the directory containing .nessus files [CURRENT DIRECTORY]: ",
                         logger=logger, default=os.getcwd()).strip()
                     args.directory = dir_input if dir_input != "" else None
-                elif choice in ["f", "filepaths", "f"]:
+                
+                # A filepath is the full path to a specific file, not a folder.
+                #If the user enter "f" or "filepaths"
+                elif choice in ["f", "filepaths"]:
                     logger.info("You may enter one or more filepaths separated by semicolons (;).")
                     filepaths = []
                     while True:
@@ -211,7 +226,7 @@ def prompt_user_for_missing_args(args, logger):
                     logger.error("Invalid option. Please choose Directory or Filepaths.")
                     continue
 
-            # --- Validate and correct directory if provided ---
+            # --- Validate if a correct directory is provided. If the directory does not exist, user will have to enter a  valid directory. Re-checking will be done. ---
             if args.directory is not None:
                 while True:
                     if not os.path.isdir(args.directory):
@@ -226,7 +241,13 @@ def prompt_user_for_missing_args(args, logger):
                             args.directory = new_dir
                             continue  # Re-check the new directory.
                     else:
-                        # Directory exists; ensure it has enough .nessus files.
+                        """
+                        Directory exists; ensure it has enough .nessus files. There must at least be 1 Nessus File for doing the Importing, but at least 2 for the other functions
+                        (export/convert/combine).
+
+                        If the directory does not contain the minimum specified number of nessus files for each of the EzAudit function, user will have to enter a valid directory to meet the requirements.
+                        """
+                        
                         required_files = 1 if args.import_mode else 2
                         if not check_min_nessus_files(args.directory, min_files=required_files, recursive=args.no_recursive):
                             logger.error(f"Directory '{args.directory}' does not contain at least {required_files} Nessus file{'s' if required_files > 1 else ''}.")
@@ -246,6 +267,20 @@ def prompt_user_for_missing_args(args, logger):
                 collected_filepaths = []
                 for fp in args.filepaths:
                     # Validate existence and extension.
+                    """
+                    Check if the filepath provided is an actual legitimate file. 
+                    
+                    If it is not a legitimate filepath (IF Branch)
+                    --> User will have to enter a new filepath. Program will then check if the new filepath entered is a legitimate filepath or not,
+                    and whether the new filepath have a .nessus extension. 
+
+                    If it is a legitimate fielpath (ELIF BRANCH)
+                    --> Check if the file has a .nessus extension. If doesn't, user will have to enter a new filepath. Program will then check if the new filepath entered is a legitimate filepath or not,
+                    and whether the new filepath have a .nessus extension. 
+
+                    If it is a legitimate filepath, and the filepath ends with a .nessus extension (ELSE BRANCH), then append the filepaths list to the collected_filepaths list. 
+
+                    """
                     if not os.path.isfile(fp):
                         logger.error(f"File '{fp}' does not exist.")
                         while True:
@@ -254,6 +289,8 @@ def prompt_user_for_missing_args(args, logger):
                                 logger=logger, default="").strip()
                             if new_fp == "":
                                 break  # Skip this file.
+                            
+                            # os.path.isfile() method in Python is used to check if a path refers to a regular file (not a directory or any other type of file system object). 
                             if not os.path.isfile(new_fp):
                                 logger.error(f"File '{new_fp}' does not exist.")
                                 continue
@@ -262,6 +299,7 @@ def prompt_user_for_missing_args(args, logger):
                                 continue
                             collected_filepaths.append(new_fp)
                             break
+
                     elif not fp.lower().endswith('.nessus'):
                         logger.error(f"File '{fp}' does not have a .nessus extension.")
                         while True:
@@ -283,21 +321,34 @@ def prompt_user_for_missing_args(args, logger):
 
                 # Remove duplicates (comparing absolute paths).
                 unique_filepaths = []
-                seen = set()
+                seen = set() # Creates a set object. The items in a set list are unordered, so it will appear in random order.
                 for fp in collected_filepaths:
-                    abs_fp = os.path.abspath(fp)
+                    abs_fp = os.path.abspath(fp) # get the full (absolute) path of a file or folder
                     if abs_fp in seen:
                         logger.info(f"Duplicate file '{fp}' detected; skipping duplicate.")
                         continue
                     seen.add(abs_fp)
                     unique_filepaths.append(fp)
                 # If a valid directory exists, remove filepaths that refer to files within it.
+                """
+                Converts the provided directory (args.directory) into an absolute path.
+                
+                For every file path:
+                COnvert the filepath into its absolute path.
+                Checks if the file is inside the directory.
+                It uses os.path.commonpath():
+                If the common path of [file, directory] equals the directory,
+                → the file is inside the directory.
+                → Skip it.
+
+                Otherwise, keep it.
+                """
                 if args.directory:
                     abs_dir = os.path.abspath(args.directory)
                     filtered = []
                     for fp in unique_filepaths:
                         abs_fp = os.path.abspath(fp)
-                        if os.path.commonpath([abs_fp, abs_dir]) == abs_dir:
+                        if os.path.commonpath([abs_fp, abs_dir]) == abs_dir: # get the longest common sub-path in a list of paths. 
                             logger.info(f"File '{fp}' is within the specified directory; skipping it from filepaths.")
                         else:
                             filtered.append(fp)
@@ -329,6 +380,7 @@ def prompt_user_for_missing_args(args, logger):
                 logger.error("No valid directory or filepaths provided.")
         # End of while loop for file/directory input
                 
+    
             
     if args.export_mode and not args.csv:
         args.csv = get_user_input_with_default("What do you want to name the output CSV file? (e.g. output.csv) [output.csv]: ", logger=logger, default="output.csv")
@@ -479,19 +531,18 @@ def main():
             username = get_non_blank_input("Enter your Nessus username: ", logger=logger)
             password = get_non_blank_input("Enter your Nessus password: ", password=True, logger=logger)
         
-        nessus_api.set_credentials(username, password) # set the username and password
-        token = nessus_api.login_nessus() # Login to Nessus Web Client with the username and password, obtain the token for the login
+        nessus_api.set_credentials(username, password) # Set the Nessus username and Nessus password obtained from user input.
+        token = nessus_api.login_nessus() #Obtain the token that is being used for authentication to Nessus Web Client.
         
-        if token: # If a token is received
-            nessus_api.set_token(token) # Set the Nessus Login token
+        if token: # If it is a successful login
+            nessus_api.set_token(token) # Set the token obtained
             logger.info("Login successful. Proceeding...")
             break
-        else: #If no login token is being obtained
-
-            if attempt == max_attempts: #If this is your last try, you will get locked out.
+        else: # If it is an unsuccessful login (No login token is being obtained)
+            if attempt == max_attempts: # When Maximum number of attempts are reached.
                 logger.error(f"Login failed after {max_attempts} attempts")
                 sys.exit(1)
-            else: # Retype your username and password again
+            else:
                 logger.error(f"Login attempt {attempt}/{max_attempts} failed. Please try again")
                 
                 if args.config and args.username and args.password:

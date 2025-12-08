@@ -128,7 +128,7 @@ class NessusAPI:
     def get_api_token_automatically(self):
         """Get the API token from the Nessus server.
         
-        This function tries to scrape the static API token from Nessus’s web interface by:
+        This function tries to scrape the static API token from Nessus web interface by:
 
         - loading the Nessus webpage
         -finding the path to the JavaScript file
@@ -142,10 +142,13 @@ class NessusAPI:
             nessus_page.raise_for_status()
             nessus_page_text = nessus_page.text # Reads the HTML to retrieve the raw content of an HTTP response in string format. 
             
-            # Extract the version (v=1234567) number from HTML
-            # scans the entire string for the first occurrence of the pattern
-            # If a match is found, it returns a MatchObject.
-            # If no match is found, it returns None
+            """
+            Extract the version (v=1234567) number from the HTML Source Code of https://localhost:8834
+            scans the entire string for the first occurrence of the pattern
+            If a match is found, it returns a MatchObject.
+            If no match is found, it returns None
+            """
+            
             match = re.search(r'nessus6\.js\?v=(\d+)', nessus_page_text)
 
 
@@ -172,7 +175,7 @@ class NessusAPI:
                 self.logger.error("Could not find the 'getApiToken' function in the JavaScript file.")
                 return None
             
-            api_token = token_match.group(1) # Function extracts abcdef123456789
+            api_token = token_match.group(1) # Extract and store the API token. i.e. Function extracts abcdef123456789
             self.logger.debug(f"Extracted API token: {api_token}")
             self.api_token = api_token # Store the token
             return True
@@ -235,7 +238,7 @@ class NessusAPI:
             data = resp.json() # Converts the JSON response into a Python dictionary
             folders = data.get("folders", [])
             self.logger.debug(f"Retrieved {len(folders)} folders from Nessus")
-            return {folder["name"]: folder["id"] for folder in folders}
+            return {folder["name"]: folder["id"] for folder in folders} # Convert the list into a dictionary
 
         except Exception as e:
             self.logger.error(f"Error retrieving folders: {e}")
