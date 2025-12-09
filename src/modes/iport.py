@@ -9,7 +9,7 @@ from utils.helper import check_for_susan_items_xml, get_susan_items_to_remove, g
 def choose_folder_interactively(nessus_api, folders):
     """
     Display available folders and prompt the user to enter a folder name or number.
-    - If the user enters a number, the folder corresponding to that index is used.
+    - If the user enters a number, the folder corresponding to that number is used.
     - If the user enters a name:
         - If it exists, that folder is used.
         - Otherwise, the user is asked whether to create the folder.
@@ -17,52 +17,63 @@ def choose_folder_interactively(nessus_api, folders):
     """
     print_folders = True
     while True:
-        if folders: # When folders are present 
+        if folders: # When folders are present within the Nessus Web Client
             if print_folders:
+
+                """
+                folders is a dictionary returned from get_folders():
+                folders.items() becomes a list of tuples:
+                x is each tuple: ("My Scans", 5)
+                x[0] is the folder name string
+                .lower() makes sorting case-insensitive
+                So it sorts alphabetically by the folder name, ignoring uppercase/lowercase.
+                folder_list is a sorted list of (name, id) tuples, sorted alphabetically by folder name, case-insensitive.
+                The numbers 1, 2, 3, 4 you see in the menu are just display numbering, not folder IDs.
+                """
                 folder_list = sorted(folders.items(), key=lambda x: x[0].lower()) # Sort the folders dictionary
                 print("Available Folders:")
-                for idx, (fname, _) in enumerate(folder_list, start=1): # Start the folders from ID 1
+                for idx, (fname, _) in enumerate(folder_list, start=1): # sorts the folder names alphabetically, index is for displaying numbering, does not reflect the actual ID
                     print(f"  {idx}. {fname}")
             folder_input = get_non_blank_input("Enter the folder name or number to use (Enter a new name to create the folder): ", logger=nessus_api.get_logger())
-        else: # When no folders are found
+        else: # When no folders are found in the Nessus Web Client
             nessus_api.get_logger().error("No folders found on the Nessus server.")
             folder_input = get_non_blank_input("Enter a new folder name to create: ", logger=nessus_api.get_logger())
             # proceed to the else statement flow
         
         print_folders = True
 
-        # If there are folders and input is a number, select from the list.
+        # If there are folders found within the Nessus Web Client and input is a number, select from the list.
         if folder_input.isdigit() and folders:
             idx = int(folder_input)
-            if 1 <= idx <= len(folder_list): #If the folder number is within the available folder number range
+            if 1 <= idx <= len(folder_list): #If the folder number entered is within the available folder number range
                 selected = folder_list[idx - 1]
                 nessus_api.get_logger().info(f"Using existing folder '{selected[0]}' (ID: {selected[1]}).")
-                return selected[1]
-            else: # If the folder number written is not within the available folder number range
+                return selected[1] # Return the Folder ID
+            else: # If the folder number entered is not within the available folder number range
                 if get_user_confirmation(f"Could not find folder number {folder_input}. Do you want to create the folder named {folder_input}? (y/N): ", default=False):
-                    folder_id = nessus_api.create_folder(folder_input)
+                    folder_id = nessus_api.create_folder(folder_input) # Create a new folder with the folder name if the user agree
                     if not folder_id:
                         sys.exit(1)
                     return folder_id
 
-
-        else: #
-            if not re.match(r'^[A-Za-z0-9\s_-]+$', folder_input):
+        # If the input is not a number
+        else:
+            if not re.match(r'^[A-Za-z0-9\s_-]+$', folder_input): # Ensure the folder name entered matches the following regex conditions
                 nessus_api.get_logger().error("Invalid folder name. Only alphabets, numbers, dashes, spaces, and underscores are allowed.")
                 print_folders = False
                 continue
             
-            if len(folder_input) > 20:
+            if len(folder_input) > 20: # If the folder name entered matches the regex conditions, but is greater than 20 characters
                 nessus_api.get_logger().error("Max 20 characters allowed for folder name.")
                 print_folders = False
                 continue
             
-            if folder_input in folders:
+            if folder_input in folders: #If the folder name entered matches the regex conditions, less than 20 characters, and is in one of the folders within the folders dictionary
                 nessus_api.get_logger().info(f"Using existing folder '{folder_input}' (ID: {folders[folder_input]}).")
-                return folders[folder_input]
-            else:
+                return folders[folder_input] # Return the Folder ID
+            else: # if the folder named entered matches the regex conditions, less than 20 characters, but is not found in the folders dictionary
                 if get_user_confirmation(f"Folder '{folder_input}' not found. Create new folder? (y/N): ", default=False):
-                    folder_id = nessus_api.create_folder(folder_input)
+                    folder_id = nessus_api.create_folder(folder_input)  # Create a new folder with the folder name entered if the user agree
                     if folder_id:
                         return folder_id
                     else:
@@ -105,7 +116,7 @@ def nessus_import(nessus_api, directory=None, filepaths=None, flags=None):
     if flags is None:
         flags = {}
     
-    folders = nessus_api.get_folders()
+    folders = nessus_api.get_folders() # Get all Nessus Folders within the Nessus Web Client
     if flags.upload_folder:
         if flags.upload_folder in folders:
             folder_id = folders[flags.upload_folder]
@@ -121,10 +132,12 @@ def nessus_import(nessus_api, directory=None, filepaths=None, flags=None):
                 nessus_api.get_logger().error(f"Folder '{flags.upload_folder}' not found and user did not want to create it.")
                 sys.exit(1)
     else:
-        folder_id = choose_folder_interactively(nessus_api, folders)
+        folder_id = choose_folder_interactively(nessus_api, folders) # Allow user to choose the folders interactively via user prompt
 
     # Gather .nessus files from the specified directory.
     nessus_files = []
+
+    # gather_nessus_files function returns a list of absolute paths for all .nessus files in the directory, extend the nessus_files list.
     if directory:
         nessus_files.extend(gather_nessus_files(directory, recursive=flags.no_recursive))
     if filepaths:

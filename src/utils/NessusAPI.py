@@ -189,11 +189,13 @@ class NessusAPI:
         Create a new folder on the Nessus server.
         Returns the new folder's ID or None if creation fails.
         """
-        self.set_json_header()
-        url = f"{self.base_url.rstrip('/')}/folders"
-        payload = {"name": folder_name}
+
+        
+        self.set_json_header() # Add a JSON Header
+        url = f"{self.base_url.rstrip('/')}/folders" # Build the API URL https://localhost:8834/folders
+        payload = {"name": folder_name} # Payload will be the Folder Name inserted
         try:
-            response = self.session.post(url, json=payload, verify=self.verify, timeout=10)
+            response = self.session.post(url, json=payload, verify=self.verify, timeout=10) # Sent a HTTP POST Request to https://localhost:8834/folders
             
             self.logger.debug(f"Payload: {payload}")
             self.logger.debug(f"Response status: {response.status_code}")
@@ -233,7 +235,7 @@ class NessusAPI:
         """
         try:
             url = f"{self.base_url.rstrip('/')}/folders" # Builds the API URL for getting folders
-            resp = self.session.get(url, verify=self.verify, timeout=10) # Sends a GET request to Nessus
+            resp = self.session.get(url, verify=self.verify, timeout=10) # Sends a GET request to Nessus with the API URL mentioned above
             resp.raise_for_status()
             data = resp.json() # Converts the JSON response into a Python dictionary
             folders = data.get("folders", [])
