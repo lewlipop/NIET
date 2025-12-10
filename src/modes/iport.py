@@ -30,9 +30,9 @@ def choose_folder_interactively(nessus_api, folders):
                 folder_list is a sorted list of (name, id) tuples, sorted alphabetically by folder name, case-insensitive.
                 The numbers 1, 2, 3, 4 you see in the menu are just display numbering, not folder IDs.
                 """
-                folder_list = sorted(folders.items(), key=lambda x: x[0].lower()) # Sort the folders dictionary
+                folder_list = sorted(folders.items(), key=lambda x: x[0].lower()) # Sort the folders dictionary by folder names alphabetically
                 print("Available Folders:")
-                for idx, (fname, _) in enumerate(folder_list, start=1): # sorts the folder names alphabetically, index is for displaying numbering, does not reflect the actual ID
+                for idx, (fname, _) in enumerate(folder_list, start=1): # after sorting, index is for displaying numbering, does not reflect the actual ID
                     print(f"  {idx}. {fname}")
             folder_input = get_non_blank_input("Enter the folder name or number to use (Enter a new name to create the folder): ", logger=nessus_api.get_logger())
         else: # When no folders are found in the Nessus Web Client
@@ -91,12 +91,12 @@ def process_file(folder_id, file_path, nessus_api, verbose=False, index=None, to
         nessus_api.get_logger().debug(f"{'[' + f'{index}/{total}' + '] ' if index and total else ''} Uploading file: {file_path}")
 
     # Step 1: Upload the file.
-    upload_response = nessus_api.upload_file(file_path, index, total)
+    upload_response = nessus_api.upload_file(file_path, index, total) # Run the upload_file() function in NessusAPI.py
     
     # Step 2: Import the scan.
-    import_response = nessus_api.import_scan(folder_id, file_path, upload_response, index, total)
+    import_response = nessus_api.import_scan(folder_id, file_path, upload_response, index, total) # Run the import_scan() function in NessusAPI.py
 
-    return import_response
+    return import_response # Return value should be a True or False
 
 
 def nessus_import(nessus_api, directory=None, filepaths=None, flags=None):
@@ -153,9 +153,12 @@ def nessus_import(nessus_api, directory=None, filepaths=None, flags=None):
         nessus_api.get_logger().info(f"No .nessus files found in directory {directory}")
         sys.exit(1)
     
+
+    #Check for the presence of Susan items
     found = False
+
     for file in nessus_files:
-        if check_for_susan_items_xml(file, flags.susan_items_to_remove or None, logger=nessus_api.get_logger()):
+        if check_for_susan_items_xml(file, flags.susan_items_to_remove or None, logger=nessus_api.get_logger()): # In each nessus file, 
             nessus_api.get_logger().debug(f"Susan items found in {file}.")
             found = True
             
@@ -177,43 +180,95 @@ def nessus_import(nessus_api, directory=None, filepaths=None, flags=None):
                     remove_report_items_from_xml(file, items_to_remove, nessus_api.get_logger())
 
     # Set up progress tracking.
-    progress_lock = threading.Lock()
-    progress_count = 0
+    progress_lock = threading.Lock() # A lock is required because multiple threads may update this counter at the same time.
+    progress_count = 0 # tracks how many files has been processed
 
     # Mapping of file paths to their (1-indexed) order for verbose progress.
     file_to_index = {f: i for i, f in enumerate(nessus_files, start=1)}
+
+    """
+    Sample output of file_to_index:
+    {
+    "C:\Windows\System32\a.nessus": 1,
+    "C:\Windows\System32\b.nessus": 2,
+    "C:\Windows\System32\c.nessus": 3
+    }
+    """
 
     success_count = 0
     failure_count = 0
 
     def process_wrapper(file_path):
         nonlocal progress_count
-        index = file_to_index[file_path]
-        result = process_file(folder_id, file_path, nessus_api, verbose=flags.verbose, index=index, total=total_files)
+        index = file_to_index[file_path] # Obtain the index number of the file (as seen in the example above) aka the value of the key within the dictioanry
+        result = process_file(folder_id, file_path, nessus_api, verbose=flags.verbose, index=index, total=total_files) # redirect to process_file() function
         with progress_lock:
             progress_count += 1
             if not flags.verbose:
                 print(f"Progress: [{progress_count}/{total_files}]", end="\r", flush=True)
-        return result
+        return result # Return result should be either a True or False
 
+    # If Multithreading happened
     if flags.threads > 1:
         nessus_api.get_logger().info(f"Processing files using {flags.threads} threads...")
-        with concurrent.futures.ThreadPoolExecutor(max_workers=flags.threads) as executor:
+
+        """
+        Submits each file to a thread
+        Returns a future object for each task
+        """
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=flags.threads) as executor: #Creates a pool of worker threads.
+
+            """
+            1. Iterates through every .nessus file in nessus_files
+            2. For each file, submit a task to the thread pool
+                executor.submit(process_wrapper, file) means:
+                Run process_wrapper(file) in a background thread
+                Immediately return a Future object representing that task
+            3. Create a dictionary
+                {
+                future_obj1: "a.nessus",
+                future_obj2: "b.nessus",
+                future_obj3: "c.nessus"
+                }
+            """
             futures = {executor.submit(process_wrapper, file): file for file in nessus_files}
+
+            """
+            This loops through futures in the order they finish.
+            fastest → slowest
+            (Not in the original file-list order)
+
+            This is important for parallel processing — whichever thread completes first is handled first.
+            """
+            
             for future in concurrent.futures.as_completed(futures):
+                
+                """
+                If process_wrapper(file) returned something → you get it here.
+                If it raised an exception → future.result() raises the same exception.
+                Usually the code returns:
+                True = success
+                False = failure
+                """
                 result = future.result()
                 if result:
                     success_count += 1
                 else:
                     failure_count += 1
-    else:
+
+    else: # When there is no multithreading
         nessus_api.get_logger().info("Processing files sequentially...")
+
+        # For each of the .nessus file in its absolute path , send the file to the process_wrapper() function
         for file in nessus_files:
             result = process_wrapper(file)
-            if result:
+            if result: # IF True
                 success_count += 1
-            else:
+            else: # IF False
                 failure_count += 1
+
+        # Process repeats again until all files in the nessus_files list are completed.
 
     # Move to a new line after progress is complete.
     if not flags.verbose:

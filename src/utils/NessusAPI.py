@@ -231,8 +231,9 @@ class NessusAPI:
         "Policies": 3,
         "Imported": 7
         }
-
+        
         """
+
         try:
             url = f"{self.base_url.rstrip('/')}/folders" # Builds the API URL for getting folders
             resp = self.session.get(url, verify=self.verify, timeout=10) # Sends a GET request to Nessus with the API URL mentioned above
@@ -245,14 +246,15 @@ class NessusAPI:
         except Exception as e:
             self.logger.error(f"Error retrieving folders: {e}")
             return {}
-        
+    
+    # Upload the Nessus File found in the File Explorer to the Nessus Web Client
     def upload_file(self, file_path, index=None, total=None):
         self.remove_json_header()
-        upload_url = f"{self.base_url.rstrip('/')}/file/upload"
+        upload_url = f"{self.base_url.rstrip('/')}/file/upload" # Build the Nessus API URL
         try:
-            with open(file_path, 'rb') as f:
+            with open(file_path, 'rb') as f: # Open the nessus file
                 files_dict = {"Filedata": f}
-                response = self.session.post(upload_url, files=files_dict, verify=self.verify, timeout=30)
+                response = self.session.post(upload_url, files=files_dict, verify=self.verify, timeout=30) # Send a HTTP POST request to https://localhost:8834/file/upload
             
             response.raise_for_status()
             data = response.json()
@@ -268,10 +270,10 @@ class NessusAPI:
 
     def import_scan(self, folder_id, file_path, nessus_file_id, index=None, total=None):
         self.set_json_header()
-        import_url = f"{self.base_url.rstrip('/')}/scans/import"
-        payload = {"folder_id": folder_id, "file": nessus_file_id}
+        import_url = f"{self.base_url.rstrip('/')}/scans/import" # Build the Nessus API URL
+        payload = {"folder_id": folder_id, "file": nessus_file_id} # Payload
         try:
-            response = self.session.post(import_url, json=payload, verify=self.verify, timeout=30)
+            response = self.session.post(import_url, json=payload, verify=self.verify, timeout=30) # Send a HTTP POST Request to http://localhost:8834/scans/import
             response.raise_for_status()
             self.logger.debug(f"{'[' + f'{index}/{total}' + '] ' if index and total else ''}Imported scan from file: {file_path}")
             return True

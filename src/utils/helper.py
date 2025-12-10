@@ -201,6 +201,7 @@ def parse_range_input(input_str, max_val):
     return result
 
 
+# Parse the XML nessus file with the encodings stated in the encoding list and return the tree
 def try_parse_with_encodings(file_path, encodings=None, logger=None):
     if encodings is None:
         encodings = ['utf-8', 'cp1252', 'latin-1']
@@ -226,7 +227,7 @@ def check_for_susan_items_xml(file_path, susan_items=None, logger=None):
     root = tree.getroot()
     
     if susan_items is None:
-        susan_items = [item['strToFind'] for item in PREDEFINED_SUSAN_ITEMS_TO_REMOVE_XML]
+        susan_items = [item['strToFind'] for item in PREDEFINED_SUSAN_ITEMS_TO_REMOVE_XML] # List out all the PREDEFINED SUSAN items that is to be removed from the XML List as defined above.
         
     found_items = []
         

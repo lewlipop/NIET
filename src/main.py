@@ -380,16 +380,16 @@ def prompt_user_for_missing_args(args, logger):
                 logger.error("No valid directory or filepaths provided.")
         # End of while loop for file/directory input
                 
-    
-            
+
+    # Ask the user to name the output CSV file -- default value is output.csv            
     if args.export_mode and not args.csv:
         args.csv = get_user_input_with_default("What do you want to name the output CSV file? (e.g. output.csv) [output.csv]: ", logger=logger, default="output.csv")
-        if not args.csv.lower().endswith('.csv'):
+        if not args.csv.lower().endswith('.csv'): # If the input does not name with a .csv extension, append .csv to it
             args.csv += '.csv'
             
-    if args.export_mode and args.excel is True:
+    if args.export_mode and args.excel is True: # Ask the user to name the output Excel File -- default value is output.xlsx
         args.excel = get_user_input_with_default("What do you want to name the output Excel file? (e.g. output.xlsx) [output.xlsx]: ", logger=logger, default="output.xlsx")
-        if not args.excel.lower().endswith('.xlsx'):
+        if not args.excel.lower().endswith('.xlsx'): # If the input does not name with a .xlsx extension, append .xlsx to it
             args.excel += '.xlsx'
         
 
