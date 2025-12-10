@@ -247,12 +247,12 @@ def nessus_combine(output, scan_name, directory=None, filepaths=None, logger=Non
     compliance_flag = getattr(flags, "compliance", None) if flags else None
     compliance_path = getattr(flags, "compliance_path", None) if flags else None
 
-    if not directory and not filepaths:
+    if not directory and not filepaths: # If directory and filepaths are both None, then have to provide either a directory or a list of filepaths
         if logger:
             logger.error("Need to provide either a directory or a list of filepaths.")
         sys.exit(1)
     
-    if not scan_name:
+    if not scan_name: # If the name of the merged scan is not provided
         scan_name = get_user_input_with_default(
             f"Enter the new name for the merged scan (e.g. Merged Scan) [Merged Scan {datetime.now().strftime('%Y%m%d%H%M%S')}]: ",
             validate=r'^[A-Za-z0-9_\-\s]+$',
@@ -276,6 +276,9 @@ def nessus_combine(output, scan_name, directory=None, filepaths=None, logger=Non
     if directory:
         if logger:
             logger.debug(f"Gathering Nessus files from {directory}")
+        
+        """Return a list of absolute paths for all .nessus files in the directory.
+        If recursive is False, only files in the root directory are returned."""
         nessus_files = gather_nessus_files(directory)
         if filepaths:
             for filepath in filepaths:
@@ -287,12 +290,12 @@ def nessus_combine(output, scan_name, directory=None, filepaths=None, logger=Non
     else:
         nessus_files = filepaths
     
-    if len(nessus_files) == 0:
+    if len(nessus_files) == 0: #If there are no nessus files found
         if logger:
             logger.error("No Nessus files found in the directory.")
         sys.exit(1)
         
-    if len(nessus_files) == 1:
+    if len(nessus_files) == 1: # If there are only 1 Nessus File found
         if logger:
             logger.error("Need more than 1 Nessus file in the directory to combine.")
         sys.exit(1)

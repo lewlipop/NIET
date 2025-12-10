@@ -137,7 +137,7 @@ def nessus_import(nessus_api, directory=None, filepaths=None, flags=None):
     # Gather .nessus files from the specified directory.
     nessus_files = []
 
-    # gather_nessus_files function returns a list of absolute paths for all .nessus files in the directory, extend the nessus_files list.
+    # gather_nessus_files function returns a list of absolute paths for all .nessus files in the chosen directory from the File Explorer, extend the nessus_files list.
     if directory:
         nessus_files.extend(gather_nessus_files(directory, recursive=flags.no_recursive))
     if filepaths:

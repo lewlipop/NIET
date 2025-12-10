@@ -135,7 +135,6 @@ def load_config(args):
         if hasattr(args, key):
             setattr(args, key, value)
         
-
     if args.software_exclusion_keywords and type(args.software_exclusion_keywords) == list:
         args.software_exclusion_keywords = ",".join(args.software_exclusion_keywords) # If a field is a list, convert it to a comma-separated string
 
@@ -413,15 +412,15 @@ def prompt_user_for_missing_args(args, logger):
     if args.convert_mode and not args.excel_config_path:
         args.excel_config_path = None
         
-    if args.combine_mode:
-        if not args.output:
+    if args.combine_mode: 
+        if not args.output: # Ask user to enter the name of the output combined Nessus File -- default is output.nessus
             args.output = get_user_input_with_default("What do you want to name the output Nessus file? (e.g. output.nessus) [output.nessus]: ", logger=logger, default="output.nessus")
         
-        if args.output:
+        if args.output: # Check if the name of the output comboined Nessus File ends with the .nessus file extension 
             if not args.output.lower().endswith('.nessus'):
-                args.output += '.nessus'
+                args.output += '.nessus' # If the name doesn't end with a .nessus, append a .nessus extension to it.
                 
-        if not args.scan_name:
+        if not args.scan_name: # Ask user to enter the name of the merged Nessus scan -- default is Merged Scan {}
             args.scan_name = get_user_input_with_default(f"What do you want to name the merged scan? (e.g. Merged Scan) [Merged Scan {datetime.now().strftime('%Y%m%d%H%M%S')}]: ", logger=logger, default=f"Merged Scan {datetime.now().strftime('%Y%m%d%H%M%S')}")
         
         if args.compliance_path and not os.path.isfile(args.compliance_path):
