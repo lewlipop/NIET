@@ -416,7 +416,7 @@ def prompt_user_for_missing_args(args, logger):
         if not args.output: # Ask user to enter the name of the output combined Nessus File -- default is output.nessus
             args.output = get_user_input_with_default("What do you want to name the output Nessus file? (e.g. output.nessus) [output.nessus]: ", logger=logger, default="output.nessus")
         
-        if args.output: # Check if the name of the output comboined Nessus File ends with the .nessus file extension 
+        if args.output: # Check if the name of the output combined Nessus File ends with the .nessus file extension 
             if not args.output.lower().endswith('.nessus'):
                 args.output += '.nessus' # If the name doesn't end with a .nessus, append a .nessus extension to it.
                 

@@ -138,7 +138,7 @@ class NessusAPI:
         
         """
         try:
-            nessus_page = requests.get(self.base_url, verify=self.verify, timeout=5) 
+            nessus_page = requests.get(self.base_url, verify=self.verify, timeout=5) # self.base_url = https://localhost:8834
             nessus_page.raise_for_status()
             nessus_page_text = nessus_page.text # Reads the HTML to retrieve the raw content of an HTTP response in string format. 
             

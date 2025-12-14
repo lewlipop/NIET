@@ -49,6 +49,16 @@ def trim_source_content(file_path):
         content = f.read()
     # DOTALL mode: '.' matches newlines.
     match = re.search(r'(?s)(<ReportHost.*</ReportHost>)', content)
+
+    """
+    (?s) = DOTALL mode → . matches newlines
+    <ReportHost.*</ReportHost>:
+    matches from the first <ReportHost
+    all the way to the last </ReportHost>
+
+    If <ReportHost> exists → returns ALL <ReportHost>...</ReportHost> XML blocks in the .nessus file as one single combined string.
+    If not → return entire file (fallback safety)
+    """
     if match:
         return match.group(1)
     else:
@@ -59,6 +69,8 @@ def get_nessus_report_hosts_from_content(content):
     Extracts ReportHost blocks from the provided content.
     The regex looks for a <ReportHost ...> tag and lazily captures everything until the next
     <ReportHost ...> tag or the end of the string.
+
+    Splits the trimmed content into INDIVIDUAL ReportHost blocks
     """
     pattern = r'(<ReportHost[^>]*>.*?)(?=<ReportHost[^>]*>|$)'
     hosts = re.findall(pattern, content, flags=re.DOTALL)
@@ -68,6 +80,13 @@ def get_destination_hosts(file_path):
     """
     Extracts ReportHost blocks from the destination file.
     Assumes that each ReportHost block is wrapped with a closing </ReportHost> tag.
+
+    <ReportHost> is the per-host container in a Nessus .nessus file. Each <ReportHost> 
+    represents one scanned host (IP / hostname) and contains all findings, plugins, ports, and metadata for that host.
+
+    Reads the entire .nessus file as text
+    Finds every complete <ReportHost> ... </ReportHost> block
+    Returns them as a list of strings
     """
     with open(file_path, 'r', encoding='utf-8') as f:
         content = f.read()
@@ -81,20 +100,39 @@ def combine_hosts(dest_hosts_tuples, source_hosts_tuples, remove_duplicates_flag
     Each host block is paired with its 'name' attribute (if present) and its origin filepath.
     
     If remove_duplicates_flag is set to "ask" or "auto", then for any host name that appears
-    more than once the user is prompted (or auto-selected) which file’s block to keep.
+    more than once the user is prompted (or auto-selected) which file's block to keep.
     Otherwise, all blocks are combined (duplicates left in).
-    """
-    # Combine both lists.
-    combined = dest_hosts_tuples + source_hosts_tuples
-    # Group by host name.
-    host_dict = {}
-    for block, host_name, origin in combined:
-        host_dict.setdefault(host_name, []).append((block, origin))
+
+    1.  Combines all <ReportHost> blocks from:
+        the destination .nessus files and all source .nessus files
+    2. Groups hosts by their name attribute (IP / hostname)
+    3. Detects duplicates (same name appearing in multiple files)
+    4. Resolves duplicates based on remove_duplicates_flag:
+    5. "ask" → user chooses which file’s host to keep
+    6. "auto" → automatically keeps the first one
+    7. otherwise → keeps all duplicates
+    8. Returns a list of <ReportHost>...</ReportHost> XML blocks only
     
+    """
+    
+    # Combine both lists. Now there are all hosts from all Nessus files in one list.
+    combined = dest_hosts_tuples + source_hosts_tuples
+    
+    # Group by host name.
+    host_dict = {} # Create a dictionary callled host_dict
+
+    # Create a host_name key, where the default value is an empty list, then append the block and origin value.
+    # block is the <ReportHost></ReportHost> block, while origin is the location of the file path.
+    for block, host_name, origin in combined:
+        host_dict.setdefault(host_name, []).append((block, origin)) 
+    
+
+    # host_name	--> "192.168.1.10" (example)
+    # entries --> list of tuples [(block, origin)]
     final_hosts = []
     for host_name, entries in host_dict.items():
-        if len(entries) == 1:
-            final_hosts.append(entries[0][0])
+        if len(entries) == 1: # IF there are only 1 entry found within the key
+            final_hosts.append(entries[0][0]) #the XML <ReportHost>...</ReportHost> string is being appended aka the block variable
         else:
             if remove_duplicates_flag and remove_duplicates_flag.lower() in ["ask", "auto"]:
                 if remove_duplicates_flag.lower() == "ask":
@@ -128,7 +166,7 @@ def combine_hosts(dest_hosts_tuples, source_hosts_tuples, remove_duplicates_flag
                 # If not removing duplicates, keep all.
                 for block, origin in entries:
                     final_hosts.append(block)
-    return final_hosts
+    return final_hosts # return the XML <ReportHost>...</ReportHost> string is being appended aka the block variable
 
 def update_report_tag(content, new_report_name):
     """
@@ -138,10 +176,12 @@ def update_report_tag(content, new_report_name):
     """
     # Pattern to find a name attribute in the <Report> tag.
     pattern = r'(<Report\b[^>]*\bname\s*=\s*")([^"]*)(")'
+
+    # If a name already exists, replaces only the value of name="", once.
     if re.search(pattern, content):
         content = re.sub(pattern, lambda m: f'{m.group(1)}{new_report_name}{m.group(3)}', content, count=1)
     else:
-        # Insert the name attribute after <Report.
+        # Insert the name attribute after <Report, i.e. inserts name="Merged Scan" right after <Report.
         content = re.sub(r'(<Report\b)', r'\1 name="{}"'.format(new_report_name), content, count=1)
     return content
 
@@ -151,20 +191,29 @@ def update_destination_file(destination_file, final_hosts, output_file, new_repo
     final list of ReportHost blocks (resolved for duplicates and processed for compliance) 
     before the closing </Report> tag, and optionally updates the <Report> tag's name attribute.
     The updated content is then written to a new output file.
+
+    # output_file is the name of the combined Nessus file
+    # new_report_name is the name of the Merged Scan
     """
+
+    # Read the destination Nessus file
     with open(destination_file, 'r', encoding='utf-8') as f:
         dest_content = f.read()
     
-    # Remove all existing ReportHost blocks.
+    # Remove all existing ReportHost blocks in the destination file.
+    # So now the file has:
+    # <Report> start
+    # no hosts
+    # </Report> end
     dest_content_no_hosts = re.sub(r'(?s)<ReportHost[^>]*>.*?</ReportHost>', '', dest_content)
     
-    # Combine final host blocks into one string.
+    # Combine final host blocks into a single XML string
     insert_content = "\n".join(final_hosts)
     
     # Insert the combined host blocks just before the closing </Report> tag.
     updated_content = re.sub(r'(</Report>)', lambda m: f"{insert_content}\n{m.group(1)}", dest_content_no_hosts)
     
-    # If a new report name is provided, update the <Report> tag.
+    # If a new report name for the Merged Scan is provided, update the <Report> tag.
     if new_report_name:
         updated_content = update_report_tag(updated_content, new_report_name)
     
@@ -300,33 +349,70 @@ def nessus_combine(output, scan_name, directory=None, filepaths=None, logger=Non
             logger.error("Need more than 1 Nessus file in the directory to combine.")
         sys.exit(1)
     
+    # The first .nessus file becomes the destination
+    # All other files will be merged into this one
     destination_file = nessus_files[0]
     
+
+    """
+    Reads the entire .nessus file as text
+    Finds every complete <ReportHost> ... </ReportHost> block
+    Returns them as a list of strings containing individual <ReportHost>...</ReportHost> block 
+    stored in the dest_host_list list variable
+    """
     dest_hosts_list = get_destination_hosts(destination_file)
+
+    """
+    For each ReportHost block within the dest_hosts_list, use regex to find the string name="__", and then extract out the host name
+    The ReportHost block (Host), the host name (host_name) and the destination_file (where the ReportHost block originate from) are grouped togetehr to form a tuple,
+    and then append to the dest_hosts_tuples list.
+    """
+
     dest_hosts_tuples = []
     for host in dest_hosts_list:
-        m = re.search(r'name\s*=\s*"([^"]+)"', host)
-        host_name = m.group(1) if m else None
-        dest_hosts_tuples.append((host, host_name, destination_file))
+        m = re.search(r'name\s*=\s*"([^"]+)"', host) # Regex finds the value name="192.168.1.10" / name="server01"
+        host_name = m.group(1) if m else None # host_name = "192.168.1.10" / host_name = "server01"
+        dest_hosts_tuples.append((host, # full <ReportHost>...</ReportHost> block
+                                  host_name, # extracted name attribute
+                                  destination_file)) # which .nessus file it came from
     
-    # Process each source file.
+    """
+    Process the remaining files within the nessus_files list.
+    For each file in the nessus_files list
+    1. Extract out ALL the <ReportHost>...</ReportHost> XML blocks in the .nessus file as one single combined string
+    (trim_source_content(src_file))
+    2. Split the one single combined string above as a list containing multiple individual ReportHost blocks.
+    3. For each ReportHost block, use regex to find the string name="__", and then extract out the host name
+    4. The ReportHost block (Host), the host name (host_name) and the src_file (where the ReportHost block originate from) are grouped togetehr to form a tuple,
+    and then append to the source_hosts_tuples list.
+
+    Entire process is repeated for the next nessus file in the nessus_files list, until the nessus_files list ends.
+
+    """
     source_hosts_tuples = []
     for src_file in nessus_files[1:]:
-        trimmed_content = trim_source_content(src_file)
-        src_hosts = get_nessus_report_hosts_from_content(trimmed_content)
+        trimmed_content = trim_source_content(src_file) # returns ALL <ReportHost>...</ReportHost> XML blocks in the .nessus file as one single combined string.
+        src_hosts = get_nessus_report_hosts_from_content(trimmed_content) # Splits the trimmed content into a list containing INDIVIDUAL ReportHost blocks
         for host in src_hosts:
             m = re.search(r'name\s*=\s*"([^"]+)"', host)
             host_name = m.group(1) if m else None
-            source_hosts_tuples.append((host, host_name, src_file))
+            source_hosts_tuples.append((host, # full <ReportHost>...</ReportHost> block
+                                        host_name, # extracted name attribute 
+                                         src_file)) # which .nessus file it came from
     
     if logger:
         logger.debug("Combining Nessus files...")
+
+    # Return a combined list of Individual <ReportHost></ReportHost> block from all the .nessus files in the nessus_file list 
     final_hosts = combine_hosts(dest_hosts_tuples, source_hosts_tuples, remove_duplicates_flag, logger=logger)
     
-    # Process each host for compliance.
+    # Process each of the <ReportHost></ReportHost> block to check if there is the presennce of compliance
+    # Return a list of <ReportHost></ReportHost> block that is properly being processsed with the presence of compliance items/<compliance> tag  
     final_hosts = process_compliance_for_hosts(final_hosts, compliance_flag, compliance_item, logger=logger)
     
     # Update the destination file and write the result to the output file.
+    # output is the name of the combined Nessus file
+    # scan_name is the name of the Merged Scan
     update_destination_file(destination_file, final_hosts, output, new_report_name=scan_name, logger=logger)
     if logger:
         logger.info(f"Combined Nessus files into {output}")

@@ -6,7 +6,11 @@ from modes.convert import nessus_convert
 
 
 def check_file_mode(nessus_api, filename, prompt_text="File '{}' already exists. Overwrite (O), append (A), enter new name (N), or cancel (C)?: "):
-    """Check if a file exists and ask the user to choose a mode."""
+    
+    """Check if a file exists and ask the user to choose a mode.
+    os.path.exists() check whether a specified path for a file or directory exists in the file system.
+    """
+    
     while os.path.exists(filename):
         choice = get_non_blank_input(prompt_text.format(filename), logger=nessus_api.get_logger()).strip().lower()
         if choice in ('overwrite', 'o'):
