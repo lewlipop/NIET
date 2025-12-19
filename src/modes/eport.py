@@ -7,8 +7,10 @@ from modes.convert import nessus_convert
 
 def check_file_mode(nessus_api, filename, prompt_text="File '{}' already exists. Overwrite (O), append (A), enter new name (N), or cancel (C)?: "):
     
-    """Check if a file exists and ask the user to choose a mode.
+    """Check if the suggested name of the exported csv file has already existed in the File Explorer and ask the user to choose a mode.
     os.path.exists() check whether a specified path for a file or directory exists in the file system.
+
+    Modes available - Overwrite (O), Append (A), Enter New File Name (N), Cancel (C)
     """
     
     while os.path.exists(filename):
@@ -115,7 +117,18 @@ def get_scans_to_export(nessus_api):
     if folders:
         # Folder selection mode.
         while True:
+
+            """
+            folders.items() become a list of tuples
+            x is each tuple
+            x[0] is the folder name string
+            .lower() makes sorting case-insensitive
+            """
+            
+            # folder_list is a sorted list of (name, id) tuples, sorted alphabetically by folder name, case-insensitive.
             folder_list = sorted(folders.items(), key=lambda x: x[0].lower())
+
+            # Start the folder listing from number 1
             print("\nAvailable Folders:")
             for idx, (fname, _) in enumerate(folder_list, start=1):
                 print(f"{idx}. {fname}")
@@ -187,7 +200,7 @@ def nessus_export(nessus_api, csv_file, flags=None):
     if flags is None:
         flags = {}
     
-    # Use the --csv flag if provided; otherwise, prompt for the output filename.
+    # Use the --csv flag / the csv filename value provided in the previous input if provided; otherwise, prompt for the output filename.
     if csv_file:
         merged_filename = csv_file.strip()
     else:
