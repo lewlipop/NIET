@@ -305,6 +305,13 @@ class NessusAPI:
         and then download the file.
         """
         try:
+
+            """
+            Exports the scan in the specified format.
+            Use the Check scan export status endpoint to see the status of the requested export. 
+            On receiving a ready status, download the export file using the Download exported scan endpoint.
+            """
+            
             self.set_json_header()
             payload = {"format": "csv"}
             url = f"{self.base_url.rstrip('/')}/scans/{scan_id}/export"

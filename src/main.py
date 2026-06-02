@@ -391,7 +391,6 @@ def prompt_user_for_missing_args(args, logger):
         if not args.excel.lower().endswith('.xlsx'): # If the input does not name with a .xlsx extension, append .xlsx to it
             args.excel += '.xlsx'
         
-
     if args.convert_mode and not args.csv:
         args.csv = get_non_blank_input("What is the filepath of the CSV file to convert to Excel (e.g. /path/to/file.csv): ", logger=logger)
         

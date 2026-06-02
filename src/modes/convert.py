@@ -55,8 +55,17 @@ def create_table_and_style(sheet, table_name, config=None):
     max_row = sheet.max_row
     max_col = sheet.max_column
     
-    table_range = f"A1:{get_column_letter(max_col)}{max_row}"
-    tab = Table(displayName=table_name.replace(" ", ""), ref=table_range)
+
+    # A1 --> the top-left corner of the sheet
+    # get_column_letter(max_col) → converts a column number (e.g. 5) into Excel letters (“E”)
+    # max_row → the last row number with data
+
+    table_range = f"A1:{get_column_letter(max_col)}{max_row}" 
+    
+    # removes spaces from the table_name value so Excel will accept it as a valid table identifier on the Dipslay Name tab.
+    tab = Table(displayName=table_name.replace(" ", ""), ref=table_range) 
+
+
     style = TableStyleInfo(name=table_style, showFirstColumn=show_first_column,
                            showLastColumn=show_last_column, showRowStripes=show_row_stripes, showColumnStripes=show_column_stripes)
     tab.tableStyleInfo = style
@@ -562,9 +571,6 @@ def nessus_convert(csv_filename: str, excel_filename: str, logger=None, software
     if software_exclusion_keywords is not None:
         config.setdefault("sheets", {}).setdefault("installed_software", {}).setdefault("filter_exclude", []).extend(software_exclusion_keywords)
 
-
-
-
     """
     re.compile() pre-compiles a regular expression so Python doesn’t have to re-process the pattern every time you use it.
     This regex matches:
@@ -623,8 +629,19 @@ def nessus_convert(csv_filename: str, excel_filename: str, logger=None, software
 
                 for sheet_config in config.get("sheets", {}).values():
                     sheet_name = sheet_config.get("sheet_name")
+
+                    """
+                    If regex_flags = re.IGNORECASE, this means: case-insensitive regex matching
+                    If regex_flags = 0, this means: no special flags, normal regex, case-sensitive.
+                    """
                     regex_flags = re.IGNORECASE if sheet_config.get("case_insensitive", False) else 0
 
+
+                    """
+                    Reads a list of regex patterns from column_filter_lookup
+                    Compiles each pattern using re.compile()
+                    Stores the compiled regex objects into a new list
+                    """
                     # Compiles all regexes for performance and cleaner logic.
                     compiled_col_filter_patterns = [re.compile(pat, regex_flags) for pat in sheet_config.get("column_filter_lookup", [])]
                     compiled_filter_patterns = [re.compile(pat, regex_flags) for pat in sheet_config.get("filter", [])]
@@ -672,7 +689,7 @@ def nessus_convert(csv_filename: str, excel_filename: str, logger=None, software
 
         hosts_sheet.append(row)
 
-    create_table_and_style(hosts_sheet, "Hosts", config.get("table", {}))
+    create_table_and_style(hosts_sheet, "Hosts", config.get("table", {})) 
     hide_and_autowidth_columns(hosts_sheet, config.get("hosts", {}).get("visible_columns", []), [])
 
     for sheet_config in config.get("sheets", {}).values():
@@ -876,7 +893,7 @@ def generate_default_config():
         "auto_width_columns": []
       },
 
-    #   Users Sheet
+      # Users Sheet
       "users":{
         "sheet_name": "Users",
         "case_insensitive": True,
@@ -934,7 +951,7 @@ def generate_default_config():
 
       },
 
-    #   Installed Software Sheet
+        # Installed Software Sheet
       "installed_software":{
         "sheet_name": "Installed Software",
         "case_insensitive": True,
